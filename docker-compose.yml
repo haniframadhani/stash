@@ -1,0 +1,17 @@
+services:
+  weed-mini:
+    image: chrislusf/seaweedfs
+    container_name: weed_mini
+    command: server -dir=/data -s3
+    ports:
+      - '8333:8333' # S3 endpoint
+      - '8888:8888' # Filer UI
+      - '9333:9333' # Master UI
+    volumes:
+      - weed_data:/data
+    environment:
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: secret
+
+volumes:
+  weed_data:
