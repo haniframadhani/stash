@@ -22,8 +22,8 @@ Work top to bottom, one task at a time. Tick `[x]` only when every acceptance cr
   `bunx guren make:auth --minimal --install`. Seeder creates one user from `ADMIN_EMAIL` and `ADMIN_PASSWORD` (idempotent; updates the hash if it changed). Confirm there is no `/register` and no password-reset route.
   AC: login works; `/register` is 404; five rapid bad logins get throttled; the seeded password is stored only as a hash.
 
-- [ ] **0.5 Storage contract test and S3 compatibility check**
-  `tests/storage-contract.test.ts`: put, get, exists, delete, deleteMany, metadata (content type). Runs on `memory` and `local` always, and on the live endpoint with `RUN_S3_TESTS=1`. Record in the decision log whether the S3 driver works against a plain `endpoint` (path-style) on SeaweedFS, and the MinIO result if you tried it. If the driver can't do path-style, document the workaround in `PLANNING.md` §10.
+- [x] **0.5 Storage contract test and S3 compatibility check**
+  `tests/storage-contract.test.ts`: put, get, exists, delete, deleteMany, metadata (content type). Runs on `memory` and `local` always, and on the live endpoint with `RUN_S3_TESTS=1`. Verified: S3 driver works with plain `endpoint` (path-style) on SeaweedFS; MinIO not tested. If the driver cannot do path-style, a workaround would be needed in `PLANNING.md` §10.
   AC: contract test green on memory, local, and live SeaweedFS.
 
 - [ ] **0.6 `sharp` spike and capability probe**
@@ -152,4 +152,5 @@ _Agents: append one line per non-obvious decision: date · task · decision · r
 - 2026-11-11 · 0.3 · `@aws-sdk/client-s3` added as a direct dependency · Guren's S3 driver imports it dynamically; app code still touches storage only through `storage.disk()`.
 - 2026-11-11 · 0.3 · Compose pins `chrislusf/seaweedfs:4.53` and creates the bucket in a one-shot `bucket-init` (`weed shell`, retried until listed) · keeps `docker compose up -d` idempotent without a second toolkit image.
 - 2026-11-11 · 0.4 · The owner seeder rewrites the hash only when `ADMIN_PASSWORD` no longer verifies against the stored one · keeps `db:seed` idempotent and never creates a second account on re-run.
+- 2026-11-11 · 0.5 · S3 driver works with plain `endpoint` (path-style) on SeaweedFS · conformance test passes on memory, local, and live SeaweedFS endpoint; no vendor-specific SDK used; app code touches storage only through `storage.disk()`.
 - 2026-11-11 · 0.4 · Boot seeding is development-only, and `tests/setup.ts` (a `bunfig.toml` test preload) supplies a per-run `APP_KEY` · `bun test` and CI run without a `.env`, and tests own their rows instead of inheriting a seeded owner.
