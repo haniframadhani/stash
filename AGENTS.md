@@ -233,6 +233,24 @@ RUN_S3_TESTS=1 bun test tests/storage-contract.test.ts   # against the live S3 e
 
 All other commands (`dev`, `codegen`, `typecheck`, `test`, `guren check|audit|gate`) are listed under Development Commands. Run `bunx guren gate` before declaring done.
 
+## Local S3 storage: check before starting (local development only)
+
+Applies to local development only, whenever the work touches SeaweedFS or any other S3-compatible service (MinIO, etc.) that `docker compose` provides. It does not apply to production or CI.
+
+**Before doing anything that needs the storage backend** (running the app against S3, `RUN_S3_TESTS=1`, seeding, debugging uploads), check whether the compose stack is already up:
+
+```bash
+docker compose ps                       # is the storage service listed and "running"/"healthy"?
+docker ps --filter "name=seaweed"       # catches a container started outside this compose project
+```
+
+- **If it is running, reuse it.** Do not run `docker compose up` again, and never `docker run` a new SeaweedFS (or MinIO, etc.) container by hand.
+- **If it is not running**, start it only through the project's compose file: `docker compose up -d`. This is the one allowed way to start storage.
+- **If a port is already in use** (e.g. S3 on 8333), assume a storage container already exists. Find it with `docker ps` and reuse it. Do not start a second one on another port.
+- Do not `docker compose down`, `down -v`, restart, or recreate the storage service unless the user asks. `-v` deletes the bucket data.
+- Do not change the compose file or the S3 endpoint/credentials in `.env` just to get a fresh container. Point at the existing one.
+- If the check shows the stack is unhealthy, report it to the user instead of replacing it.
+
 ## Authorization rules (critical)
 
 - **Every** `POST`, `PUT`, `PATCH`, `DELETE`, and every private page is registered inside the `auth` middleware group (`requireAuthenticated`).
@@ -296,8 +314,9 @@ All other commands (`dev`, `codegen`, `typecheck`, `test`, `guren check|audit|ga
 
 ## Git
 
-- Small commits, imperative: `feat(upload): convert and store image version 1`.
-- One task per commit where possible. Never commit `data/`, `storage/`, `.env`, or `node_modules/`.
+- **Never run `git commit`, `git push`, `git add`, or any command that changes history or the index.** The user commits by himself. When a task is done, only **suggest a commit message** in your final reply and stop.
+- Suggested messages: small, imperative, one task per commit where possible: `feat(upload): convert and store image version 1`. If the change needs a new dependency, put the one-line justification in the suggested message.
+- Never suggest staging `data/`, `storage/`, `.env`, or `node_modules/`.
 
 ## Definition of done (any task)
 
