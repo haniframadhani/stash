@@ -9,6 +9,7 @@ import { createApp } from '@guren/core'
 import database from '../config/database.js'
 import env from '../config/env.js'
 import http from '../config/http.js'
+import images from '../config/images.js'
 import { registerWebRoutes } from '../routes/web.js'
 
 const app = createApp({
@@ -20,7 +21,7 @@ const app = createApp({
     },
   },
   env,
-  config: [database, http],
+  config: [database, http, images],
   routes: registerWebRoutes,
   // Translations live in lang/<locale>/*.json. Add locales to `supported`
   // and the request locale is detected from ?locale=, a locale cookie, or
