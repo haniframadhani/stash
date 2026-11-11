@@ -6,6 +6,7 @@
 // fallback), so keep .refine()/.transform() free of side effects.
 import 'zod/compile'
 import { createApp } from '@guren/core'
+import { HealthServiceProvider } from '@guren/core'
 import database from '../config/database.js'
 import env from '../config/env.js'
 import http from '../config/http.js'
@@ -14,10 +15,13 @@ import { registerWebRoutes } from '../routes/web.js'
 import storage from '../config/storage.js'
 import session from '../config/session.js'
 import AuthProvider from '../app/Providers/AuthProvider.js'
+import HealthProvider from '../app/Providers/HealthProvider.js'
 
 const app = createApp({
   auth: {},
-  providers: [AuthProvider],
+// HealthServiceProvider binds the container's `health` manager, which
+// HealthProvider then registers the database and storage checks into.
+  providers: [HealthServiceProvider, AuthProvider, HealthProvider],
   // Rendered into every server-rendered document. Replace public/favicon.svg
   // with your own artwork, or add more tags here (Open Graph, apple-touch-icon).
   inertia: {

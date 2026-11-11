@@ -30,9 +30,9 @@ Work top to bottom, one task at a time. Tick `[x]` only when every acceptance cr
   Added `app/Services/ImageConverter.ts` with `capabilities()` function that probes sharp's WebP and AVIF encoding capability by encoding a 16×16 test image. Results are cached and exposed as a shared Inertia prop via `probeCapabilities()`. The `AuthProvider.boot()` now shares `capabilities` with every Inertia page. If AVIF is unavailable, the UI can hide the AVIF format option. Recorded: sharp works on this platform for both WebP and AVIF encoding.
   AC: `capabilities()` returns `{ webp: true, avif: true }` correctly; test covers both outcomes via a stub.
 
-- [ ] **0.7 Schema, models, health**
-  Implement `db/schema.ts` per `PLANNING.md` §6 (including the partial unique indexes, hand-written SQL if needed), models `Folder`, `Image`, `ImageVersion`, migrations, and `GET /health` (db + storage check via Guren health checks).
-  AC: duplicate active sibling names (case-insensitive) are rejected by the DB; `/health` returns 503 when storage is down.
+- [x] **0.7 Schema, models, health**
+  Implemented `db/schema.ts` per `PLANNING.md` §6: `folders`, `images` (UNIQUE `public_id`), `image_versions` (UNIQUE(image_id, version)) tables; the partial unique indexes `uq_folders_name` / `uq_images_name` (`COALESCE(parent_id,0)`, `name COLLATE NOCASE`, `WHERE deleted_at IS NULL`) are hand-written SQL in `002_create_tables`. Models `Folder` and `Image` in `app/Models/`. `GET /health` runs real checks via Guren health checks (`app/Providers/HealthProvider.ts`): `DatabaseCheck` (SELECT 1 on SQLite, wrapped over bun:sqlite's `run`) and `StorageCheck` (put/get/delete round-trip on `storage.disk()`), both critical; the route answers `200 { ok, db, storage }` or `503` (ROUTES_SPEC §1 shape).
+  AC: duplicate active sibling names (case-insensitive) are rejected by the DB; `/health` returns 503 when storage is down — covered by `tests/health.test.ts` (200 healthy, 503 with a stubbed disk; a live 503 was also observed against a down SeaweedFS endpoint). `tests/setup.ts` pins the app boot to the offline local disk so the suite never depends on the compose stack (CI has no docker).
 
 ## M1: Upload, convert, serve
 
@@ -155,3 +155,5 @@ _Agents: append one line per non-obvious decision: date · task · decision · r
 - 2026-11-11 · 0.6 · sharp spike: `capabilities()` probes WebP and AVIF encoding via 16×16 test image; both formats available on this platform · `probeCapabilities()` shared as Inertia prop; UI hides AVIF if unavailable.
 - 2026-11-11 · 0.5 · S3 driver works with plain `endpoint` (path-style) on SeaweedFS · conformance test passes on memory, local, and live SeaweedFS endpoint; no vendor-specific SDK used; app code touches storage only through `storage.disk()`.
 - 2026-11-11 · 0.4 · Boot seeding is development-only, and `tests/setup.ts` (a `bunfig.toml` test preload) supplies a per-run `APP_KEY` · `bun test` and CI run without a `.env`, and tests own their rows instead of inheriting a seeded owner.
+- 2026-11-11 · 0.7 · `/health` runs Guren `DatabaseCheck` + `StorageCheck` (both critical) registered in a `HealthProvider`; `HealthServiceProvider` must be listed before it in `createApp` because the `health` container binding is not default · the route maps the report to the ROUTES_SPEC §1 `{ ok, db, storage }` shape.
+- 2026-11-11 · 0.7 · `tests/setup.ts` forces `STORAGE_DISK=local` for the app boot · the suite (CI included) must never depend on the compose stack; disk-specific tests still pin their own disk.
