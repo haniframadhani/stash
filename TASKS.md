@@ -18,7 +18,7 @@ Work top to bottom, one task at a time. Tick `[x]` only when every acceptance cr
   Run `bunx guren add storage`, then shape `config/storage.ts` as in `PLANNING.md` §10 (`local` and `s3` disks, `STORAGE_DISK` check, `acl: false`, `endpoint`). Add `docker-compose.yml` (SeaweedFS + `bucket-init`).
   AC: `docker compose up -d` creates the bucket; with `STORAGE_DISK=s3`, a script `put` then `get` then `delete` round-trips; with `STORAGE_DISK=local` it also works.
 
-- [ ] **0.4 Single-user auth**
+- [x] **0.4 Single-user auth**
   `bunx guren make:auth --minimal --install`. Seeder creates one user from `ADMIN_EMAIL` and `ADMIN_PASSWORD` (idempotent; updates the hash if it changed). Confirm there is no `/register` and no password-reset route.
   AC: login works; `/register` is 404; five rapid bad logins get throttled; the seeded password is stored only as a hash.
 
@@ -151,3 +151,5 @@ _Agents: append one line per non-obvious decision: date · task · decision · r
 - 2026-11-11 · 0.2 · `PUBLIC_FILE_BASE_URL` renamed to `PUBLIC_BASE_URL`; image settings exposed as a `defineConfig` binding (`images`) resolved from the validated env · matches PLANNING.md §7/§11 and gives services typed settings without reading `process.env`.
 - 2026-11-11 · 0.3 · `@aws-sdk/client-s3` added as a direct dependency · Guren's S3 driver imports it dynamically; app code still touches storage only through `storage.disk()`.
 - 2026-11-11 · 0.3 · Compose pins `chrislusf/seaweedfs:4.53` and creates the bucket in a one-shot `bucket-init` (`weed shell`, retried until listed) · keeps `docker compose up -d` idempotent without a second toolkit image.
+- 2026-11-11 · 0.4 · The owner seeder rewrites the hash only when `ADMIN_PASSWORD` no longer verifies against the stored one · keeps `db:seed` idempotent and never creates a second account on re-run.
+- 2026-11-11 · 0.4 · Boot seeding is development-only, and `tests/setup.ts` (a `bunfig.toml` test preload) supplies a per-run `APP_KEY` · `bun test` and CI run without a `.env`, and tests own their rows instead of inheriting a seeded owner.

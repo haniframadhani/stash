@@ -12,8 +12,12 @@ import http from '../config/http.js'
 import images from '../config/images.js'
 import { registerWebRoutes } from '../routes/web.js'
 import storage from '../config/storage.js'
+import session from '../config/session.js'
+import AuthProvider from '../app/Providers/AuthProvider.js'
 
 const app = createApp({
+  auth: {},
+  providers: [AuthProvider],
   // Rendered into every server-rendered document. Replace public/favicon.svg
   // with your own artwork, or add more tags here (Open Graph, apple-touch-icon).
   inertia: {
@@ -22,7 +26,7 @@ const app = createApp({
     },
   },
   env,
-  config: [database, http, images, storage],
+  config: [database, http, images, storage, session],
   routes: registerWebRoutes,
   // Translations live in lang/<locale>/*.json. Add locales to `supported`
   // and the request locale is detected from ?locale=, a locale cookie, or

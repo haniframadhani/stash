@@ -28,10 +28,11 @@ export type AppSeederContext = SqliteSeederContext
 
 /**
  * Seeding on boot is a local convenience, allowed by name: `bun run dev` sets
- * NODE_ENV=development and `bun test` sets test. Anything else, an unset NODE_ENV
- * included, never seeds, since seeders write demo accounts and production boots
- * repeatedly on serverless cold starts. Run `bunx guren db:seed` explicitly there.
+ * NODE_ENV=development. Tests seed the rows they need (a boot-time seed would
+ * make them order-dependent), and a production boot — serverless cold starts
+ * included — must never create an account. Run `bunx guren db:seed` explicitly
+ * everywhere else.
  */
 export default defineDatabaseConfig(database, {
-  seedOnBoot: process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test',
+  seedOnBoot: process.env.NODE_ENV === 'development',
 })

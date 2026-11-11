@@ -6,6 +6,8 @@ const intInRange = (min: number, max = Number.MAX_SAFE_INTEGER) =>
   Env.custom(z.coerce.number().int().min(min).max(max))
 
 const env = defineEnv({
+  SESSION_DRIVER: Env.enum(['database', 'memory', 'cookie']).default('database')
+    .describe('Where sessions live: database (the sessions table), memory (single process) or cookie.'),
   APP_NAME: Env.string().default('Guren'),
   APP_KEY: Env.string().secret().requiredInProduction()
     .describe('Root secret for signing and encryption; each use derives its own key.'),

@@ -2,10 +2,14 @@
 // Run `guren codegen` to regenerate.
 
 import type { PageContract, PagePropsRecord } from '@guren/inertia-client'
+import type { ValidationErrors } from '@guren/core'
 
 
 export const pageManifest = {
+  'auth/Login': './pages/auth/Login.tsx',
+  'dashboard/Index': './pages/dashboard/Index.tsx',
   'Home': './pages/Home.tsx',
+  'profile/Edit': './pages/profile/Edit.tsx',
 } as const
 
 export type PageManifest = typeof pageManifest
@@ -22,8 +26,20 @@ export function isPageId(value: string): value is PageId {
  * Auto-extracted Props types from page components.
  */
 export interface PagePropsMap {
+  'auth/Login': {
+  email?: string
+  errors?: ValidationErrors<'email' | 'password'>
+}
+  'dashboard/Index': {
+  user?: { id: number; name: string; email: string } | null
+}
   'Home': {
   message: string
+}
+  'profile/Edit': {
+  profile: { name: string; email: string }
+  errors?: ValidationErrors<'name' | 'email' | 'password' | 'currentPassword'>
+  status?: string
 }
 }
 
@@ -45,5 +61,14 @@ function defineGeneratedPage<TId extends string, TProps extends PagePropsRecord 
 }
 
 export const pages = {
-  Home: defineGeneratedPage<'Home', PagePropsMap['Home']>('Home', pageManifest['Home'])
+  auth: {
+    Login: defineGeneratedPage<'auth/Login', PagePropsMap['auth/Login']>('auth/Login', pageManifest['auth/Login'])
+  },
+  dashboard: {
+    Index: defineGeneratedPage<'dashboard/Index', PagePropsMap['dashboard/Index']>('dashboard/Index', pageManifest['dashboard/Index'])
+  },
+  Home: defineGeneratedPage<'Home', PagePropsMap['Home']>('Home', pageManifest['Home']),
+  profile: {
+    Edit: defineGeneratedPage<'profile/Edit', PagePropsMap['profile/Edit']>('profile/Edit', pageManifest['profile/Edit'])
+  }
 } as const

@@ -2,7 +2,12 @@
 // Run `guren codegen` to regenerate.
 
 export const routeManifest = {
-
+  'dashboard': { method: 'GET', path: '/dashboard' },
+  'login': { method: 'GET', path: '/login' },
+  'login.store': { method: 'POST', path: '/login' },
+  'logout': { method: 'POST', path: '/logout' },
+  'profile.edit': { method: 'GET', path: '/profile' },
+  'profile.update': { method: 'PUT', path: '/profile' },
 } as const
 
 export type RouteManifest = typeof routeManifest
@@ -51,7 +56,18 @@ export function route<TName extends RouteName>(name: TName, ...args: RouteArgs<T
 }
 
 export const routes = {
-
+  dashboard: (query?: RouteQuery) => route('dashboard', query),
+  login: Object.assign(
+    (query?: RouteQuery) => route('login', query),
+    {
+    store: (query?: RouteQuery) => route('login.store', query)
+  }
+  ),
+  logout: (query?: RouteQuery) => route('logout', query),
+  profile: {
+    edit: (query?: RouteQuery) => route('profile.edit', query),
+    update: (query?: RouteQuery) => route('profile.update', query)
+  }
 } as const
 
 function hasPathParams(path: string): boolean {
@@ -98,4 +114,13 @@ function appendQueryString(path: string, query?: RouteQuery): string {
 
   const serialized = search.toString()
   return serialized ? `${path}?${serialized}` : path
+}
+
+declare module '@guren/core' {
+  interface GurenRouteContracts {
+    routes: {
+      'login.store': { body: { email: string; password: string; remember: boolean } }
+      'profile.update': { body: { name: string; email: string; password: string; currentPassword: string } }
+    }
+  }
 }

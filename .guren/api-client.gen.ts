@@ -12,7 +12,32 @@
  * `path` literal, the same string the server routes on.
  */
 export interface ApiRoutes {
-  // No named routes found
+  'dashboard': {
+    method: 'GET'
+    path: '/dashboard'
+  }
+  'login': {
+    method: 'GET'
+    path: '/login'
+  }
+  'login.store': {
+    method: 'POST'
+    path: '/login'
+    body: { email: string; password: string; remember?: boolean | string }
+  }
+  'logout': {
+    method: 'POST'
+    path: '/logout'
+  }
+  'profile.edit': {
+    method: 'GET'
+    path: '/profile'
+  }
+  'profile.update': {
+    method: 'PUT'
+    path: '/profile'
+    body: { name: string; email: string; password?: string; currentPassword?: string }
+  }
 }
 
 export type ApiRouteName = keyof ApiRoutes
@@ -230,5 +255,10 @@ export function createApiClient<TRoutes extends { [K in keyof TRoutes]: { method
 }
 
 const routes: Record<string, { method: string; path: string }> = {
-
+  'dashboard': { method: 'GET', path: '/dashboard' },
+  'login': { method: 'GET', path: '/login' },
+  'login.store': { method: 'POST', path: '/login' },
+  'logout': { method: 'POST', path: '/logout' },
+  'profile.edit': { method: 'GET', path: '/profile' },
+  'profile.update': { method: 'PUT', path: '/profile' },
 }

@@ -23,3 +23,8 @@ minimumReleaseAgeExcludes = [
   "@guren/server",
   "@guren/testing",
 ]
+
+# Tests booting the real app need APP_KEY (session cookies are signed with it).
+# tests/setup.ts supplies a per-run key when no .env is present, as in CI.
+[test]
+preload = ["./tests/setup.ts"]
