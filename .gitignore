@@ -9,3 +9,5 @@ public/assets/
 docs/plans/**/*.html
 *.plan.html
 weed_data/*
+storage/app/
+public/storage

@@ -14,7 +14,7 @@ Work top to bottom, one task at a time. Tick `[x]` only when every acceptance cr
   Declare every variable from `.env.example` in `config/env.ts` (validated at boot). Add `config/images.ts` that exposes typed settings (formats, defaults, caps, `KEEP_VERSIONS`, thumb width).
   AC: a missing or invalid variable fails boot with a readable message naming it.
 
-- [ ] **0.3 Storage config and bucket**
+- [x] **0.3 Storage config and bucket**
   Run `bunx guren add storage`, then shape `config/storage.ts` as in `PLANNING.md` §10 (`local` and `s3` disks, `STORAGE_DISK` check, `acl: false`, `endpoint`). Add `docker-compose.yml` (SeaweedFS + `bucket-init`).
   AC: `docker compose up -d` creates the bucket; with `STORAGE_DISK=s3`, a script `put` then `get` then `delete` round-trips; with `STORAGE_DISK=local` it also works.
 
@@ -149,3 +149,5 @@ Work top to bottom, one task at a time. Tick `[x]` only when every acceptance cr
 _Agents: append one line per non-obvious decision: date · task · decision · reason._
 
 - 2026-11-11 · 0.2 · `PUBLIC_FILE_BASE_URL` renamed to `PUBLIC_BASE_URL`; image settings exposed as a `defineConfig` binding (`images`) resolved from the validated env · matches PLANNING.md §7/§11 and gives services typed settings without reading `process.env`.
+- 2026-11-11 · 0.3 · `@aws-sdk/client-s3` added as a direct dependency · Guren's S3 driver imports it dynamically; app code still touches storage only through `storage.disk()`.
+- 2026-11-11 · 0.3 · Compose pins `chrislusf/seaweedfs:4.53` and creates the bucket in a one-shot `bucket-init` (`weed shell`, retried until listed) · keeps `docker compose up -d` idempotent without a second toolkit image.

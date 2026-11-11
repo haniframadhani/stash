@@ -11,6 +11,7 @@ import env from '../config/env.js'
 import http from '../config/http.js'
 import images from '../config/images.js'
 import { registerWebRoutes } from '../routes/web.js'
+import storage from '../config/storage.js'
 
 const app = createApp({
   // Rendered into every server-rendered document. Replace public/favicon.svg
@@ -21,7 +22,7 @@ const app = createApp({
     },
   },
   env,
-  config: [database, http, images],
+  config: [database, http, images, storage],
   routes: registerWebRoutes,
   // Translations live in lang/<locale>/*.json. Add locales to `supported`
   // and the request locale is detected from ?locale=, a locale cookie, or

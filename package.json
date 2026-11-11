@@ -8,6 +8,7 @@
     "dev": "bun run codegen && GUREN_MCP=1 GUREN_DOCS=1 bun run dev:server",
     "dev:server": "NODE_ENV=development bun --hot bin/serve.ts",
     "console": "bun bin/console.ts",
+    "storage:check": "bun bin/storage-check.ts",
     "typecheck": "tsc --noEmit",
     "lint": "bunx oxlint",
     "lint:fix": "bunx oxlint --fix",
@@ -22,6 +23,7 @@
     "db:seed": "bunx guren db:seed"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1164.0",
     "@guren/cli": "^2.36.1",
     "@guren/core": "^1.26.1",
     "@guren/inertia-client": "^1.4.0",
