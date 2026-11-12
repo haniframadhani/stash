@@ -181,12 +181,12 @@ from `.agents/rules/` when you open it.
 
 ## Key Files
 
-| Path | Purpose |
-|------|---------|
-| `.agents/rules/` | Verified API rules (each file's `paths` frontmatter states the covered paths) |
-| `.agents/skills/guren-api/reference/` | The full API reference behind each rule, read on demand |
-| `PLANNING.md`, `TASKS.md` | Stash plan and task list (see Project: Stash) |
-| `docs/IMAGE_PIPELINE.md`, `docs/ROUTES_SPEC.md`, `docs/UI_SPEC.md` | Stash specs |
+| Path                                                               | Purpose                                                                       |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `.agents/rules/`                                                   | Verified API rules (each file's `paths` frontmatter states the covered paths) |
+| `.agents/skills/guren-api/reference/`                              | The full API reference behind each rule, read on demand                       |
+| `PLANNING.md`, `TASKS.md`                                          | Stash plan and task list (see Project: Stash)                                 |
+| `docs/IMAGE_PIPELINE.md`, `docs/ROUTES_SPEC.md`, `docs/UI_SPEC.md` | Stash specs                                                                   |
 
 ---
 
@@ -204,6 +204,7 @@ Project-specific rules. They add to, and never replace, the Guren harness above.
 ## Do not guess Guren
 
 Guren is new and its APIs are not in your training data. Before writing code against a Guren feature:
+
 - Run `bunx guren context <Entity>` for a project map with real signatures, and `bunx guren graph` for wiring.
 - Read the guide as raw Markdown: `https://guren.dev/docs/guides/<name>.md` (index: `https://guren.dev/llms.txt`, everything: `https://guren.dev/llms-full.txt`). Most relevant: `routing`, `controllers`, `validation`, `models`, `database`, `storage`, `authentication`, `sessions`, `csrf`, `views`, `frontend`, `testing`, `scheduling`, `console`, `rate-limiting`, `health-checks`, `deployment`.
 - Prefer a generator (`bunx guren make:*`, `bunx guren add *`) over hand-writing boilerplate.
@@ -274,6 +275,12 @@ docker ps --filter "name=seaweed"       # catches a container started outside th
 - The `{slug}` URL segment is cosmetic; resolve by `publicId` + `version` only.
 - Prune old versions only beyond `KEEP_VERSIONS`, oldest first, objects before rows.
 
+## Vertical slices (UI is part of "done")
+
+- Every task must end with something visible in the browser, unless it is marked (backend-only).
+- Never tick a UI task on unit tests alone. Run the task's **Manual check** with the `verify-in-browser` skill and log the result.
+- If a route, controller, or service exists with no UI, say which later task owns the UI.
+
 ## Image pipeline rules
 
 - Order: size cap → sniff → pixel cap → auto-rotate → optional resize (never enlarge) → encode → **strip metadata (EXIF/GPS)** → thumb → sha256 → store → DB. Details: `docs/IMAGE_PIPELINE.md`.
@@ -292,7 +299,7 @@ docker ps --filter "name=seaweed"       # catches a container started outside th
 - UI: React + Tailwind + shadcn/ui + lucide-react. Read `docs/UI_SPEC.md`. No other component libraries.
 - Env: declare every variable in `config/env.ts` (validated at boot). Never read `process.env` elsewhere.
 - Names: services PascalCase files, components PascalCase, routes named with `.name('area.action')`. Keep files under about 250 lines.
-- Comments explain *why*, not what.
+- Comments explain _why_, not what.
 - Architecture decisions go in `docs/adr/` following the scaffold's seed example (or `bunx guren make:adr "..."`). Do not invent front-matter; copy the seed's.
 
 ## Security checklist

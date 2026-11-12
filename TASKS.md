@@ -2,6 +2,15 @@
 
 Work top to bottom, one task at a time. Tick `[x]` only when every acceptance criterion (AC) passes and `bun run typecheck && bun test && bunx guren gate` is green. Re-read the cited spec before starting a task.
 
+## Slice rule (read first)
+
+Every task is a **vertical slice**. It must end with something the owner can **see and click** in the browser at `http://localhost:3333`, unless the task is explicitly marked **(backend-only)**.
+
+- A task that adds a route, controller, or service is **not done** until its UI surface exists, or a *named later task* owns it and this task says so.
+- Every task has a **Manual check** line: exactly what to click and what should appear. Run it in the browser (use the harness's `verify-in-browser` skill) before ticking.
+- Never tick a UI task on unit tests alone. Add one line to the decision log: `date · task · manual check result`.
+- UI built in a task follows `docs/UI_SPEC.md`. If a screen needs data that doesn't exist yet, use a small seed script or fixtures (Guren's prototype-first fixtures are fine), and say so in the task.
+
 ---
 
 ## M0: Foundation
@@ -34,100 +43,129 @@ Work top to bottom, one task at a time. Tick `[x]` only when every acceptance cr
   Implemented `db/schema.ts` per `PLANNING.md` §6: `folders`, `images` (UNIQUE `public_id`), `image_versions` (UNIQUE(image_id, version)) tables; the partial unique indexes `uq_folders_name` / `uq_images_name` (`COALESCE(parent_id,0)`, `name COLLATE NOCASE`, `WHERE deleted_at IS NULL`) are hand-written SQL in `002_create_tables`. Models `Folder` and `Image` in `app/Models/`. `GET /health` runs real checks via Guren health checks (`app/Providers/HealthProvider.ts`): `DatabaseCheck` (SELECT 1 on SQLite, wrapped over bun:sqlite's `run`) and `StorageCheck` (put/get/delete round-trip on `storage.disk()`), both critical; the route answers `200 { ok, db, storage }` or `503` (ROUTES_SPEC §1 shape).
   AC: duplicate active sibling names (case-insensitive) are rejected by the DB; `/health` returns 503 when storage is down — covered by `tests/health.test.ts` (200 healthy, 503 with a stubbed disk; a live 503 was also observed against a down SeaweedFS endpoint). `tests/setup.ts` pins the app boot to the offline local disk so the suite never depends on the compose stack (CI has no docker).
 
-## M1: Upload, convert, serve
+## M1: Upload, convert, serve (reordered into vertical slices)
 
-- [ ] **1.1 ImageConverter**
+- [x] **1.1 ImageConverter** *(backend-only)*
   `app/Services/ImageConverter.ts` per `docs/IMAGE_PIPELINE.md` §1 to §3 (pure, concurrency semaphore, metadata stripped, auto-rotate, never enlarge, animated handling). Record whether animated AVIF is supported.
   AC: all converter cases in `IMAGE_PIPELINE.md` §8 pass.
 
-- [ ] **1.2 ImageStore, UrlBuilder, Slug, NamePolicy**
-  `ImageStore` (put and read objects by version, delete, prune, keys built only here), `UrlBuilder` (all URL forms, Markdown and HTML snippets, `PUBLIC_BASE_URL`), `Slug`, `NamePolicy` (` (1)` suffix on sibling clashes).
-  AC: unit tests for slug edge cases, key format, URL forms, and name clashes.
+- [ ] **1.2 Turn the generated login and dashboard into the Stash shell** *(UI first)*
+  Auth already works from 0.4: the generated login page exists and the generated `/dashboard` page is already behind the `auth` middleware. **Reuse them; do not recreate auth, the middleware, or the routes.** This task reshapes what is there:
+  - **Dashboard → Drive page.** Rename or replace the generated dashboard so the protected page becomes `drive.index` at `/files`, using the existing `auth` group. Keep `/dashboard` as a redirect to `/files`, make `/` redirect to `/files`, and change the post-login redirect to `/files`. Remove generated dashboard content that Stash does not use.
+  - **Shell around it.** Layout per `UI_SPEC.md` §1: top bar (logo, search placeholder, log out), sidebar (My Files / Recent / Starred / Trash, storage meter placeholder; the other three can link to "coming soon" empty pages), theme tokens. The page body shows the **empty state** ("Drop images here or press New") with a disabled-for-now **New** button.
+  - **Restyle the login page** to match the shell (same tokens, centered card). Keep its working form and throttling; make sure it has no register or forgot-password links.
+  - **Shared props** on every private page: `auth`, `capabilities`, `storage`, `publicBaseUrl`, `flash`.
+  AC: responsive at 360 / 768 / 1440 px (sidebar becomes a drawer below `lg`); logging out returns to `/login`; unauthenticated `/files` and `/dashboard` redirect to `/login`; the existing auth tests still pass unchanged (or are updated only for the new redirect target).
+  **Manual check:** open `http://localhost:3333` → redirected to `/login` → sign in with the seeded user → land on `/files` inside the Stash layout with the empty state → visit `/dashboard` and get redirected to `/files` → click Log out → back at `/login`.
 
-- [ ] **1.3 Public image routes**
-  `routes/public.ts`: `image.show`, `image.latest`, `image.thumb` exactly per `IMAGE_PIPELINE.md` §4 to §5 (route parsing, headers, `304` before storage, `HEAD`, 404 cases). **Verify no `Set-Cookie`**; if the global session/CSRF middleware adds cookies, exclude or re-mount these routes, and log the mechanism.
-  AC: delivery tests from §8 pass, including "304 performs zero storage reads" and "no Set-Cookie".
+- [ ] **1.3 Services and public image routes** *(backend-only; the visible result comes in 1.4)*
+  `ImageStore` (put and read objects by version, delete, prune, keys built only here), `UrlBuilder` (all URL forms, Markdown and HTML snippets, `PUBLIC_BASE_URL`), `Slug`, `NamePolicy` (` (1)` suffix on sibling clashes). Then `routes/public.ts`: `image.show`, `image.latest`, `image.thumb` exactly per `IMAGE_PIPELINE.md` §4 to §5 (route parsing, headers, `304` before storage, `HEAD`, 404 cases). **Verify no `Set-Cookie`**; if the global session/CSRF middleware adds cookies, exclude or re-mount these routes, and log the mechanism.
+  AC: unit tests for slug edge cases, key format, URL forms, and name clashes; delivery tests from `IMAGE_PIPELINE.md` §8 pass, including "304 performs zero storage reads" and "no Set-Cookie".
+  **Manual check:** run a dev seed script that stores one converted image through `ImageStore`; open its permanent URL in a private window (no login) and see the image; open the thumb URL; edit the version in the URL to `v99` and get a 404.
 
-- [ ] **1.4 Upload endpoint**
-  `POST /uploads` per `docs/ROUTES_SPEC.md` §4: validate options (zod), convert, write objects, DB transaction (image + version 1), cleanup on failure, return savings.
-  AC: uploading a JPEG as WebP creates `images/{publicId}/v1.webp` and `v1.thumb.webp`, one `images` row, one `image_versions` row; failure after the object write leaves no objects; 413/415/422 cases return the right status; unauthenticated → rejected.
+- [ ] **1.4 Upload endpoint, minimal upload UI, and image grid** *(first end-to-end slice)*
+  Backend: `POST /uploads` per `docs/ROUTES_SPEC.md` §4 (validate options with zod, convert, write objects, DB transaction for image + version 1, cleanup on failure, return savings).
+  UI (minimal, replaced in 1.6): enable the **New → Upload images** button; it opens a plain file picker, uploads each chosen file with the **default** format and quality (XHR with progress and the `X-XSRF-TOKEN` header), shows a toast with "4.2 MB → 610 KB (−86%)", then reloads the page props so the image appears. The `drive.index` page lists active root images as a simple thumbnail grid using the permanent thumb URLs, plus the names.
+  AC: uploading a JPEG creates `images/{publicId}/v1.webp` and `v1.thumb.webp`, one `images` row, one `image_versions` row; failure after the object write leaves no objects; 413/415/422 cases return the right status and show an error toast; unauthenticated → rejected.
+  **Manual check:** sign in → New → Upload images → pick a JPEG → toast with savings → the thumbnail appears in the grid → right-click the thumbnail, copy its image address, open it in a private window and it loads.
 
-- [ ] **1.5 App shell and login page**
-  Layout per `UI_SPEC.md` §1, login page (no register link), shared props (`auth`, `capabilities`, `storage`, `publicBaseUrl`, `flash`), sidebar and top bar, theme tokens.
-  AC: responsive at 360 / 768 / 1440 px; logging out returns to `/login`.
+- [ ] **1.5 Grid and list polish** *(UI)*
+  Grid/list view toggle, sort by name / modified / size with order, `ImageCard` per `UI_SPEC.md` §4 (format badge, hover checkbox slot, ⋮ slot), list-view columns, skeleton loading, empty and error states, lazy-loaded thumbnails with explicit width and height.
+  AC: 50 seeded images scroll smoothly; view and sort survive a refresh; thumbnails lazy-load from the permanent thumb URL; no layout shift.
+  **Manual check:** seed 50 images → switch grid/list → change sort → refresh → same state; stop storage and see the error state.
 
-- [ ] **1.6 Browse root (grid and list)**
-  `drive.index` at root with sort and order, `ImageCard`, list view, skeleton, empty and error states.
-  AC: 50 seeded images scroll smoothly; thumbnails lazy-load from the permanent thumb URL.
-
-- [ ] **1.7 Review & convert dialog and upload queue**
-  Per `UI_SPEC.md` §3 and §4: drop, paste, picker → dialog → Confirm → queue (concurrency 2, progress, cancel, retry, savings). AVIF disabled per capability and for animated inputs; unsupported or oversized files flagged.
-  AC: dropping 20 mixed files (including an SVG and a 60 MB file) shows 18 valid rows and 2 flagged; Confirm uploads them; nothing is sent before Confirm (verified in a test or manual network log).
+- [ ] **1.6 Review & convert dialog and upload queue** *(UI; replaces the minimal picker from 1.4)*
+  Per `UI_SPEC.md` §3 and §4: drop, paste, or picker → **Review & convert dialog** → Confirm → queue panel (concurrency 2, progress, cancel, retry, savings per file). WebP / AVIF / Original, quality, max dimension, "Apply to all", per-row override, "Remember these settings". AVIF disabled per `capabilities` and for animated inputs; unsupported or oversized files flagged and excluded. Window-wide drop overlay.
+  AC: dropping 20 mixed files (including an SVG and a 60 MB file) shows 18 valid rows and 2 flagged; Confirm uploads them; **nothing is sent before Confirm** (verified in a test or the network log).
+  **Manual check:** drag 20 files onto the window → dialog opens → change one row to AVIF and another to Original → Confirm → queue shows progress and savings → grid updates.
 
 ## M2: Browse and organize
 
 - [ ] **2.1 Folder CRUD and navigation**
-  `folders.store`, `folders.update`, `/files/:folderId`, breadcrumbs, "New folder" dialog. Cycle rejection.
+  `folders.store`, `folders.update`, `/files/:folderId`, breadcrumbs (each crumb a link), "New folder" dialog, folder cards above the images. Cycle rejection.
   AC: unit tests cover cycle detection (self, child, deep descendant); deep links and refresh work; unknown id → 404 page.
+  **Manual check:** New → New folder "Trips" → click into it → upload an image there → breadcrumb back to My Files → refresh inside the folder.
 
 - [ ] **2.2 Rename and details**
-  Inline rename (F2) for images and folders; images update `name` and `slug` but not the version.
+  Inline rename (F2 and menu) for images and folders; images update `name` and `slug` but not the version.
   AC: renaming an image keeps its existing permanent link working (test); a sibling name clash shows an inline error.
+  **Manual check:** rename an image → the old permanent URL still opens it.
 
 - [ ] **2.3 Selection and bulk bar**
-  Click, Ctrl/Cmd, Shift range, Ctrl/Cmd+A, Esc; floating action bar.
+  Click, Ctrl/Cmd, Shift range, Ctrl/Cmd+A, Esc; floating action bar with count.
   AC: selection clears on folder change.
+  **Manual check:** select 3 images with each method → bar shows "3 selected" → Esc clears.
 
 - [ ] **2.4 Move**
   `items.move` (atomic, rejects cycles), drag and drop onto folder, breadcrumb, sidebar; "Move to…" picker.
   AC: optimistic update with rollback on error.
+  **Manual check:** drag an image onto a folder card → it disappears from here and appears inside; move a folder into itself → error toast.
 
 - [ ] **2.5 Context menu and lightbox**
-  Right-click and long-press menu; lightbox with prev/next, keyboard, download, info panel.
+  Right-click and long-press menu (Open, Share*, Download, Rename, Move to…, Move to trash; items not built yet are hidden, not dead). Lightbox with prev/next, keyboard, download, info panel.
   AC: keyboard navigation works across the current folder's images.
+  **Manual check:** double-click an image → lightbox → arrow keys move between images → Esc closes.
 
 ## M3: Versioning and sharing
 
 - [ ] **3.1 Replace image (new version)**
-  `images.replace` per `IMAGE_PIPELINE.md` §4 and §7: write `v(n+1)`, flip `current_version` in one transaction, then prune beyond `KEEP_VERSIONS`. "Replace image…" reuses the Review dialog in single-file mode.
+  `images.replace` per `IMAGE_PIPELINE.md` §4 and §7: write `v(n+1)`, flip `current_version` in one transaction, then prune beyond `KEEP_VERSIONS`. Context menu **Replace image…** reuses the Review dialog in single-file mode.
   AC: after a replace, the latest URL serves the new bytes with a new ETag; the previous permanent URL still serves the old bytes; the pointer flip is atomic (test with an injected failure).
+  **Manual check:** replace an image → thumbnail updates → old permanent link still shows the old picture, latest link shows the new one.
 
 - [ ] **3.2 Versions panel and restore**
-  Details panel lists versions with copy-permanent-link, **Make current**, open. `images.restoreVersion` moves only the pointer.
+  Lightbox info panel lists versions with copy-permanent-link, **Make current**, open. `images.restoreVersion` moves only the pointer.
   AC: restoring v1 serves v1 on the latest URL; v2's permanent URL still works; pruned versions return 404.
+  **Manual check:** open info → Versions → Make current on v1 → latest link shows v1.
 
 - [ ] **3.3 Share dialog**
-  Per `UI_SPEC.md` §5: latest, permanent, share page, Markdown/HTML snippets, AVIF warning, localhost hint, multi-select copy.
+  Per `UI_SPEC.md` §5: latest, permanent, share page, Markdown/HTML snippets, AVIF warning, localhost hint, multi-select copy. Add 🔗 to the lightbox, context menu, and selection bar.
   AC: copied URLs open in a private window without login and show the expected version.
+  **Manual check:** click 🔗 → Copy each link → paste in a private window.
 
 - [ ] **3.4 Share page**
   `GET /p/:publicId` via `this.view()` (no hydration): image, metadata, download, OG/Twitter tags.
   AC: `og:image` is the permanent URL; trashed images 404; no cookies set.
+  **Manual check:** open the share page logged out → see the image, details, and a working Download button.
 
-- [ ] **3.5 Cache behavior tests (end to end)**
+- [ ] **3.5 Cache behavior tests (end to end)** *(backend-only)*
   Replace an image and assert: pinned = immutable, latest = revalidating, ETag differs, `304` works, thumbnails are pinned.
   AC: the whole `IMAGE_PIPELINE.md` §5 header table is asserted in tests.
 
 ## M4: Drive polish
 
-- [ ] **4.1 Star and Starred view**; **4.2 Trash**
-  `items.star`, `items.trash`, `items.restore`, `items.delete`, `trash.empty`, Trash page. Trashed images' public URLs return 404 immediately.
+- [ ] **4.1 Star and Starred view**
+  `items.star`, star badge on cards, ★ in the menu and selection bar, `/starred` page.
+  **Manual check:** star two images → open Starred → both listed; unstar → gone.
+
+- [ ] **4.2 Trash**
+  `items.trash`, `items.restore`, `items.delete`, `trash.empty`, Trash page with Restore, Delete forever, and Empty trash (confirm dialogs), "Moved to trash · Undo" toast. Trashed images' public URLs return 404 immediately.
   AC: after "Delete forever", **every version's** objects are gone and rows removed (test with the memory disk); trashing a folder hides descendants; restore with a trashed parent goes to root.
-- [ ] **4.3 Recent** (last 100, grouped by day). **4.4 Search** (name contains, debounced, `/search`).
-- [ ] **4.5 Storage meter** (sum of `image_versions.size`, counts) and **sort/view prefs** (persisted in `localStorage`).
-- [ ] **4.6 Auto-purge**: Guren scheduled task deletes trash older than `TRASH_RETENTION_DAYS` using the same permanent-delete routine.
+  **Manual check:** trash an image → its public link 404s → Undo or Restore from Trash → link works again → Delete forever → gone.
+
+- [ ] **4.3 Recent and 4.4 Search**
+  `/recent` (last 100, grouped by day) and `/search?q=` (name contains, debounced search box in the top bar, `/` focuses it).
+  **Manual check:** type in the search box → results page → clear → back.
+
+- [ ] **4.5 Storage meter and view prefs**
+  Sidebar meter from `image_versions.size` and counts; sort and view prefs persisted in `localStorage`.
+  **Manual check:** upload an image → the meter number grows.
+
+- [ ] **4.6 Auto-purge** *(backend-only)*: Guren scheduled task deletes trash older than `TRASH_RETENTION_DAYS` using the same permanent-delete routine.
   AC: a test with a fake clock purges only expired items.
 
 ## M5: Hardening and operations
 
-- [ ] **5.1 Reconcile command**: `bun run console images:reconcile [--dry-run]` reports storage objects with no row and rows with missing objects; deletes orphans only with an explicit flag, never on a listing error.
-- [ ] **5.2 Rate limits**: Guren rate limiter on public routes (generous) and upload/replace (modest).
-- [ ] **5.3 Route-guard test**: `tests/route-guard.test.ts` per `ROUTES_SPEC.md` §6.
-- [ ] **5.4 Accessibility and shortcuts**: focus management, ARIA grid, shortcuts table, reduced motion.
-- [ ] **5.5 Dark mode**: follow system, with a manual toggle.
+- [ ] **5.1 Reconcile command** *(backend-only)*: `bun run console images:reconcile [--dry-run]` reports storage objects with no row and rows with missing objects; deletes orphans only with an explicit flag, never on a listing error.
+- [ ] **5.2 Rate limits** *(backend-only)*: Guren rate limiter on public routes (generous) and upload/replace (modest). A throttled upload shows a friendly toast.
+- [ ] **5.3 Route-guard test** *(backend-only)*: `tests/route-guard.test.ts` per `ROUTES_SPEC.md` §6.
+- [ ] **5.4 Accessibility and shortcuts**: focus management, ARIA grid, shortcuts table, `?` help dialog, reduced motion.
+  **Manual check:** press `?` → shortcuts dialog; tab through the grid with the keyboard.
+- [ ] **5.5 Dark mode**: follow system, with a manual toggle in the top bar.
 - [ ] **5.6 E2E smoke** (Playwright or the scaffold's choice): login, review and convert, upload, copy link, open it logged-out, replace, check old and new links, trash, restore, delete forever.
 - [ ] **5.7 Docker deploy**: `bunx guren deploy --target docker`; enable the `app` profile in compose; `sharp` works in the image; `data/` mounted.
   AC: `docker compose --profile app up -d` serves the app and passes `/health`.
+  **Manual check:** open the containerized app, log in, upload an image.
 - [ ] **5.8 README**: quick start, env reference, swapping storage backends, sharing beyond LAN (tunnel and `PUBLIC_BASE_URL`), **backups (SQLite and bucket)**.
 
 ---
@@ -146,7 +184,7 @@ Work top to bottom, one task at a time. Tick `[x]` only when every acceptance cr
 
 ## Decision log
 
-_Agents: append one line per non-obvious decision: date · task · decision · reason._
+_Agents: append one line per non-obvious decision: date · task · decision · reason. For UI tasks also: date · task · manual check result._
 
 - 2026-11-11 · 0.2 · `PUBLIC_FILE_BASE_URL` renamed to `PUBLIC_BASE_URL`; image settings exposed as a `defineConfig` binding (`images`) resolved from the validated env · matches PLANNING.md §7/§11 and gives services typed settings without reading `process.env`.
 - 2026-11-11 · 0.3 · `@aws-sdk/client-s3` added as a direct dependency · Guren's S3 driver imports it dynamically; app code still touches storage only through `storage.disk()`.
@@ -157,3 +195,7 @@ _Agents: append one line per non-obvious decision: date · task · decision · r
 - 2026-11-11 · 0.4 · Boot seeding is development-only, and `tests/setup.ts` (a `bunfig.toml` test preload) supplies a per-run `APP_KEY` · `bun test` and CI run without a `.env`, and tests own their rows instead of inheriting a seeded owner.
 - 2026-11-11 · 0.7 · `/health` runs Guren `DatabaseCheck` + `StorageCheck` (both critical) registered in a `HealthProvider`; `HealthServiceProvider` must be listed before it in `createApp` because the `health` container binding is not default · the route maps the report to the ROUTES_SPEC §1 `{ ok, db, storage }` shape.
 - 2026-11-11 · 0.7 · `tests/setup.ts` forces `STORAGE_DISK=local` for the app boot · the suite (CI included) must never depend on the compose stack; disk-specific tests still pin their own disk.
+- 2026-11-12 · 1.1 · Animated AVIF is treated as **unsupported**: sharp 0.35.5 encodes an animated GIF to AVIF without error but flattens it to a single frame (`pages: 1`), so the server rejects `avif` for animated inputs with 422 instead of silently dropping frames · recorded in IMAGE_PIPELINE.md §2.
+- 2026-11-12 · 1.1 · Fixed the 0.6 spike's `capabilities()` probe: it fed a raw RGBA buffer to sharp without `raw:` options, so every probe threw and would have reported `{ webp: false, avif: false }` · now probes a properly declared raw input; `probeCapabilities()` is cached on first call instead of at import time.
+- 2026-11-12 · 1.1 · `convert()` takes caps/quality/thumb settings via `options.settings` (defaulting to env defaults) and throws `ImageConversionError` subclasses carrying the HTTP status (413/415/422) · keeps the service pure and lets the upload controller (1.4) map errors to responses.
+- 2026-11-12 · plan · Reordered M1 into vertical slices: UI shell is now 1.2, services + public routes merged into 1.3, upload endpoint ships with a minimal upload button and grid in 1.4, polish in 1.5, the Review & convert dialog in 1.6 · nothing was visible in the browser until old task 1.5; every task now has a Manual check.

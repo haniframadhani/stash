@@ -1,232 +1,286 @@
-/** Pure image conversion pipeline wrapped by sharp.
- *  Order: size cap → sniff → pixel cap → auto-rotate → optional resize (never enlarge)
- *         → encode → strip metadata (EXIF/GPS) → thumb → sha256 → store.
- *
- *  D4: sharp is used instead of Bun.Image because Bun.Image AVIF support is
- *     unavailable on Linux and AVIF encoding on macOS needs Apple Silicon M3+.
- *     sharp ships its own encoders and works everywhere.
+/** Pure image conversion pipeline (docs/IMAGE_PIPELINE.md §1 to §3).
+ *  Bytes in, bytes + metadata out — no storage, no DB, no request context.
+ *  Order: size cap → sniff → pixel cap → auto-rotate → optional resize
+ *  (never enlarge) → encode → strip metadata → thumb → sha256.
  */
-import sharp from 'sharp'
+import { createHash } from 'node:crypto'
+import sharp, { type Metadata } from 'sharp'
+import type { ImageSettings } from '../../config/images.js'
+import { probeCapabilities, type Capabilities } from './ImageCapabilities.js'
+import {
+  AnimatedFormatError,
+  FormatUnavailableError,
+  ImageConversionError,
+  ImageTooLargeError,
+  PixelCapExceededError,
+  UnsupportedInputError,
+} from './ImageErrors.js'
 
-/** Accepted input formats (sniffed from uploaded file, not trusted from client). */
+/** Input formats accepted after sniffing the bytes (never the client MIME). */
 export type InputFormat = 'jpeg' | 'png' | 'webp' | 'avif' | 'gif'
 
-/** Output formats the pipeline can produce. */
-export type OutputFormat = 'webp' | 'avif' | 'original'
+/** Output choice from the Review & convert dialog. */
+export type OutputChoice = 'webp' | 'avif' | 'original'
 
-/** Concurrency semaphore limit for parallel encodes (sharp workers). */
-export const CONVERT_CONCURRENCY = 2
+/** The format actually stored: `original` keeps the sniffed input format. */
+export type StoredFormat = InputFormat
 
-/** Maximum dimension after optional resize. Images larger than this are
- *  down-scaled; smaller images are left untouched (never enlarged). */
-export const MAX_DIMENSION = 4000
+const ACCEPTED_INPUTS = new Set<InputFormat>(['jpeg', 'png', 'webp', 'avif', 'gif'])
 
-/** Maximum upload size in bytes (from MAX_UPLOAD_MB env). */
-export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-
-/** Validate that the requested output format is supported. */
-export function isOutputFormat(format: string): format is OutputFormat {
-  return ['webp', 'avif', 'original'].includes(format)
+const MIME: Record<InputFormat, string> = {
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  gif: 'image/gif',
 }
 
-/** Options for the encodeImage function. */
-export interface EncodeOptions {
-  outputFormat: OutputFormat
+const EXT: Record<InputFormat, string> = {
+  jpeg: 'jpg',
+  png: 'png',
+  webp: 'webp',
+  avif: 'avif',
+  gif: 'gif',
+}
+
+/** Mirrors the config/env defaults. Production passes `container.make('images')`
+ *  via `options.settings`; tests pass their own to exercise the caps. */
+export const DEFAULT_IMAGE_SETTINGS: ImageSettings = {
+  acceptedInputFormats: ['jpeg', 'png', 'webp', 'avif', 'gif'],
+  outputFormats: ['webp', 'avif', 'original'],
+  defaultFormat: 'webp',
+  defaultQualityWebp: 80,
+  defaultQualityAvif: 55,
+  avifEffort: 4,
+  maxUploadBytes: 50 * 1024 * 1024,
+  maxPixels: 100_000_000,
+  convertConcurrency: 2,
+  keepVersions: 5,
+  thumbWidth: 320,
+  thumbQuality: 70,
+}
+
+/** Limits simultaneous encodes (CONVERT_CONCURRENCY, default 2); AVIF is slow,
+ *  so parallel uploads must queue rather than compete for CPU. */
+export class Semaphore {
+  private active = 0
+  private waiting: Array<() => void> = []
+
+  constructor(public limit: number) {}
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    await this.acquire()
+    try {
+      return await fn()
+    }
+    finally {
+      this.release()
+    }
+  }
+
+  private acquire(): Promise<void> {
+    if (this.active < this.limit) {
+      this.active++
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => {
+      this.waiting.push(() => {
+        this.active++
+        resolve()
+      })
+    })
+  }
+
+  private release(): void {
+    this.active--
+    this.waiting.shift()?.()
+  }
+}
+
+const semaphore = new Semaphore(DEFAULT_IMAGE_SETTINGS.convertConcurrency)
+
+export interface ConvertOptions {
+  /** Output format. Default 'webp' (env DEFAULT_FORMAT). */
+  format?: OutputChoice
+  /** 1–100. Defaults to settings.defaultQualityWebp / defaultQualityAvif. */
   quality?: number
-  maxDimension?: number
-  effort?: number  // AVIF encoding effort (0-9, lower is faster)
-  stripMetadata?: boolean
+  /** Fit inside this square when the image is larger. Never enlarges. */
+  maxDimension?: number | null
+  /** Caps and thumb settings; defaults to DEFAULT_IMAGE_SETTINGS. */
+  settings?: ImageSettings
+  /** Override of the boot-time capability probe (tests). */
+  capabilities?: Capabilities
 }
 
-/** Check whether sharp can encode a given format.
- *  Returns true if the format is available, false otherwise.
- *  Probes at runtime; results are cached and exposed as a shared Inertia prop.
- *
- *  We create a minimal 16×16 test image and attempt to encode it.
- *  If the format-specific method exists and succeeds, the format is available.
- */
-export async function capabilities(): Promise<{
-  webp: boolean
-  avif: boolean
-}> {
-  // Create a minimal 16×16 test image (RGBA buffer)
-  const testBuffer = Buffer.alloc(16 * 16 * 4, 0)
-  // Fill with a simple gradient so the data is non-trivial
-  for (let i = 0; i < 16 * 16; i++) {
-    testBuffer[i * 4 + (i % 4)] = (i * 43 + 17) % 256
-  }
-
-  const results: { webp: boolean; avif: boolean } = {
-    webp: false,
-    avif: false,
-  }
-
-  // Test WebP encoding
-  try {
-    // @ts-ignore - sharp type variance across versions
-    await sharp(testBuffer).webp({ quality: 80 }).toBuffer()
-    results.webp = true
-  } catch {
-    // sharp.webp not available or failed
-  }
-
-  // Test AVIF encoding
-  try {
-    // @ts-ignore - sharp type variance across versions
-    await sharp(testBuffer).avif({ quality: 55, effort: 4 }).toBuffer()
-    results.avif = true
-  } catch {
-    // sharp.avif not available (common on Linux)
-  }
-
-  return results
-}
-
-/** Encode an image buffer to the specified output format.
- *  Returns the encoded Buffer, or throws if the format is unsupported.
- *
- *  Pipeline order (per docs/IMAGE_PIPELINE.md §1–§3):
- *   1. Size cap (reject > MAX_UPLOAD_BYTES)
- *   2. Sniff format (trust sniffer, not client MIME)
- *   3. Pixel cap (reject > MAX_PIXELS)
- *   4. Auto-rotate (exif orientation)
- *   5. Resize if needed (never enlarge, max MAX_DIMENSION)
- *   6. Encode to target format
- *   7. Strip metadata (EXIF and GPS tags) if requested
- *   8. Build thumbnail (320px width)
- *   9. Compute sha256
- */
-export async function encodeImage(
-  buffer: Buffer,
-  options: EncodeOptions,
-): Promise<{
-  data: Buffer
-  format: OutputFormat
+export interface ConvertResult {
+  /** Encoded bytes to store under `images/{publicId}/v{n}.{ext}`. */
+  image: Buffer
+  /** 320 px WebP thumbnail, first frame only. */
+  thumb: Buffer
+  format: StoredFormat
+  mime: string
+  ext: string
+  /** Stored bytes. */
   size: number
   width: number
   height: number
+  isAnimated: boolean
   sha256: string
-  mime: string
-}> {
-  // 1. Size cap
-  if (buffer.length > MAX_UPLOAD_BYTES) {
-    throw new Error(
-      `Upload exceeds size cap of ${MAX_UPLOAD_BYTES / 1024 / 1024} MB`,
-    )
+  originalSize: number
+  storedSize: number
+  savedBytes: number
+  savedPercent: number
+}
+
+/** Convert one image. Pure: reads only `input` and `options`, touches nothing else.
+ *  Throws ImageConversionError subclasses whose `status` maps to 413/415/422. */
+export async function convert(input: Buffer, options: ConvertOptions = {}): Promise<ConvertResult> {
+  const settings = options.settings ?? DEFAULT_IMAGE_SETTINGS
+  const choice = options.format ?? settings.defaultFormat
+
+  // §3.1: size cap before any parsing.
+  if (input.length > settings.maxUploadBytes) {
+    throw new ImageTooLargeError(settings.maxUploadBytes)
   }
 
-  // 2. Sniff format from buffer content (not from client-supplied MIME)
-  const sniffed = await sharp(buffer).metadata()
-  const width = sniffed.width ?? 0
-  const height = sniffed.height ?? 0
-
-  // 3. Pixel cap (decompression bomb defense)
-  const pixelCount = width * height
-  if (pixelCount > 300 * 1000 * 1000) { // 300MP rough cap
-    throw new Error('Image exceeds pixel cap (decompression bomb defense)')
+  if (options.quality !== undefined && (!Number.isInteger(options.quality) || options.quality < 1 || options.quality > 100)) {
+    throw new ImageConversionError('invalid_quality', 422, `quality must be an integer between 1 and 100, got ${options.quality}`)
   }
 
-  // 4. Auto-rotate: sharp auto-rotates based on EXIF orientation by default
-  let img = sharp(buffer)
-
-  // 5. Resize if needed (never enlarge)
-  let resizedImg = img
-  if (options.maxDimension && width > options.maxDimension) {
-    resizedImg = img.resize(options.maxDimension, null, {
-      withoutEnlargement: true,
-      fit: 'inside',
-    })
-  } else {
-    resizedImg = img
-  }
-
-  // 6. Encode to target format
-  let encoded: Buffer
-
-  switch (options.outputFormat) {
-    case 'webp':
-      // @ts-ignore - sharp type variance
-      encoded = await resizedImg.webp({ quality: options.quality ?? 80 }).toBuffer()
-      break
-    case 'avif':
-      // @ts-ignore - sharp type variance
-      encoded = await resizedImg.avif({
-        quality: options.quality ?? 55,
-        effort: options.effort ?? 4,
-      }).toBuffer()
-      break
-    case 'original':
-      // Return the original buffer unchanged (no conversion)
-      encoded = buffer
-      break
-    default:
-      throw new Error(`Unsupported output format: ${options.outputFormat}`)
-  }
-
-  // 7. Strip metadata (EXIF and GPS) if requested
-  let finalData = encoded
-  if (options.stripMetadata && options.outputFormat !== 'original') {
-    // Re-encode without metadata using withMetadata(false)
-    if (options.outputFormat === 'webp') {
-      // @ts-ignore - sharp type variance
-      finalData = await sharp(encoded).withMetadata(false).webp({
-        quality: options.quality ?? 80,
-      }).toBuffer()
-    } else if (options.outputFormat === 'avif') {
-      // @ts-ignore - sharp type variance
-      finalData = await sharp(encoded).withMetadata(false).avif({
-        quality: options.quality ?? 55,
-        effort: options.effort ?? 4,
-      }).toBuffer()
+  semaphore.limit = settings.convertConcurrency
+  return semaphore.run(async () => {
+    // §3.2: sniff the bytes; a text/corrupt buffer throws, svg/tiff/heif sniff
+    // as their own format and are rejected against the accepted list.
+    // metadata() reads headers only — no decode, no pixel allocation — so the
+    // limitInputPixels cap belongs to the decode pipeline below.
+    let sniffed: Metadata
+    try {
+      sniffed = await sharp(input).metadata()
     }
-    // original format: keep as-is (client chose original)
-  }
+    catch {
+      throw new UnsupportedInputError()
+    }
+    const inputFormat = sniffed.format as InputFormat | undefined
+    if (!inputFormat || !ACCEPTED_INPUTS.has(inputFormat)) {
+      throw new UnsupportedInputError(inputFormat)
+    }
 
-  // 8. Build thumbnail (320px width, maintain aspect ratio)
-  // @ts-ignore - sharp type variance
-  const _thumbBuf = await sharp(finalData)
-    .resize(320, null, {
-      fit: 'inside',
-      withoutEnlargement: true,
+    const isAnimated = (sniffed.pages ?? 1) > 1
+    // §3.2: decode every frame for gif/webp so conversion keeps animation.
+    const decodeAnimated = isAnimated && (inputFormat === 'gif' || inputFormat === 'webp')
+
+    // Pixel cap over all decoded frames; with animated:true sharp reports the
+    // height as the sum of every frame's height.
+    const sourcePixels = decodeAnimated
+      ? await sharp(input, { animated: true }).metadata()
+      : sniffed
+    if ((sourcePixels.width ?? 0) * (sourcePixels.height ?? 0) > settings.maxPixels) {
+      throw new PixelCapExceededError(settings.maxPixels)
+    }
+
+    // 'original' stores the sniffed bytes unchanged: no rotate, no resize, no
+    // re-encode — EXIF (GPS included) is kept, which the dialog must warn about.
+    if (choice === 'original') {
+      return finish(input, await makeThumb(input, settings), {
+        format: inputFormat,
+        width: sniffed.width ?? 0,
+        height: sniffed.height ?? 0,
+        isAnimated,
+        originalSize: input.length,
+      })
+    }
+
+    // §2: refuse a format sharp cannot encode (probed at boot) and refuse AVIF
+    // for animated inputs (it would silently lose the animation).
+    const caps = options.capabilities ?? await probeCapabilities()
+    if (choice === 'webp' && !caps.webp) throw new FormatUnavailableError('webp')
+    if (choice === 'avif' && !caps.avif) throw new FormatUnavailableError('avif')
+    if (choice === 'avif' && isAnimated) throw new AnimatedFormatError()
+
+    const quality = options.quality ?? (choice === 'avif' ? settings.defaultQualityAvif : settings.defaultQualityWebp)
+
+    let pipeline = sharp(input, {
+      limitInputPixels: settings.maxPixels,
+      animated: decodeAnimated,
+      // §3.3: auto-orient from EXIF first, so stripping metadata later cannot
+      // flip the picture.
+    }).rotate()
+    // §3.4: fit inside the square when asked; withoutEnlargement keeps smaller
+    // images untouched.
+    if (options.maxDimension) {
+      pipeline = pipeline.resize({
+        width: options.maxDimension,
+        height: options.maxDimension,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+    }
+
+    // §3.5: encode. No `.withMetadata()` call — sharp drops EXIF/GPS/ICC extras
+    // by default, so public images never leak location. A decode failure here
+    // (e.g. a header that lied about its size, tripping limitInputPixels) is
+    // the client's bad input, so it answers 422.
+    let data: Buffer
+    let info: { width: number, height: number, pages?: number }
+    try {
+      const encoded = choice === 'webp'
+        ? await pipeline.webp({ quality }).toBuffer({ resolveWithObject: true })
+        : await pipeline.avif({ quality, effort: settings.avifEffort }).toBuffer({ resolveWithObject: true })
+      data = encoded.data
+      info = encoded.info
+    }
+    catch (error) {
+      throw new ImageConversionError(
+        'conversion_failed',
+        422,
+        error instanceof Error ? `Could not decode or encode the image: ${error.message}` : 'Could not decode or encode the image',
+      )
+    }
+
+    // For animated output sharp reports info.height as the sum over all frames;
+    // the stored dimensions are the per-frame ones.
+    const frames = decodeAnimated ? (info.pages ?? sniffed.pages ?? 1) : 1
+
+    return finish(data, await makeThumb(data, settings), {
+      format: choice,
+      width: info.width,
+      height: Math.round(info.height / frames),
+      isAnimated,
+      originalSize: input.length,
     })
-    .webp({ quality: 70 })
-    .toBuffer()
+  })
+}
 
-  // 9. Compute sha256 of the stored bytes (encoded data)
-  const crypto = await import('node:crypto')
-  const sha256 = crypto.createHash('sha256').update(finalData).digest('hex')
-
-  const mimeTypeMap: Record<OutputFormat, string> = {
-    webp: 'image/webp',
-    avif: 'image/avif',
-    original: 'image/jpeg',
-  }
-
+function finish(
+  image: Buffer,
+  thumb: Buffer,
+  parts: { format: StoredFormat, width: number, height: number, isAnimated: boolean, originalSize: number },
+): ConvertResult {
+  const storedSize = image.length
+  const savedBytes = parts.originalSize - storedSize
   return {
-    data: finalData,
-    format: options.outputFormat,
-    size: finalData.length,
-    width,
-    height,
-    sha256,
-    mime: mimeTypeMap[options.outputFormat],
+    image,
+    thumb,
+    format: parts.format,
+    mime: MIME[parts.format],
+    ext: EXT[parts.format],
+    size: storedSize,
+    width: parts.width,
+    height: parts.height,
+    isAnimated: parts.isAnimated,
+    sha256: createHash('sha256').update(image).digest('hex'),
+    originalSize: parts.originalSize,
+    storedSize,
+    savedBytes,
+    savedPercent: parts.originalSize > 0 ? Math.round((savedBytes / parts.originalSize) * 100) : 0,
   }
 }
 
-/** Probe sharp capabilities at app boot and export for Inertia props.
- *  This is called once at app boot; the result is shared as a prop so the
- *  UI can hide AVIF if it's unavailable on the runtime platform.
- *
- *  The result is cached so it's only probed once per app process lifetime.
- */
-const cachedCapabilities = (await capabilities()) as {
-  webp: boolean
-  avif: boolean
-}
-
-export function probeCapabilities(): {
-  webp: boolean
-  avif: boolean
-} {
-  return cachedCapabilities
+/** §3.6: 320 px wide WebP thumb, quality 70, first frame only (animated:false
+ *  decodes page 1). Also carries no metadata. */
+async function makeThumb(source: Buffer, settings: ImageSettings): Promise<Buffer> {
+  return sharp(source, { animated: false, limitInputPixels: settings.maxPixels })
+    .resize({ width: settings.thumbWidth, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: settings.thumbQuality })
+    .toBuffer()
 }
