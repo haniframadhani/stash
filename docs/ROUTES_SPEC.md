@@ -26,9 +26,9 @@ Legend: 🌐 public · 🔒 requires login (inside the `auth` group) · **P** In
 
 | Method | Path | Name | Notes |
 |---|---|---|---|
-| 🌐 GET | `/login` | `login.show` | **P**; guest only |
-| 🌐 POST | `/login` | `login.store` | Throttled by generated `AuthThrottle` |
-| 🔒 POST | `/logout` | `logout` | **R** |
+| 🌐 GET | `/login` | `login.show` | **P**; guest only (guests already signed in go to `/files`) |
+| 🌐 POST | `/login` | `login.store` | Throttled by generated `AuthThrottle`; redirects → `/files` |
+| 🔒 POST | `/logout` | `logout` | **R** → `/login` |
 | ✗ | `/register`, password reset | n/a | **Must not exist** (single user) |
 
 ## 3. Pages (all 🔒 **P**)

@@ -15,13 +15,14 @@ import { registerWebRoutes } from '../routes/web.js'
 import storage from '../config/storage.js'
 import session from '../config/session.js'
 import AuthProvider from '../app/Providers/AuthProvider.js'
+import StashPropsProvider from '../app/Providers/StashPropsProvider.js'
 import HealthProvider from '../app/Providers/HealthProvider.js'
 
 const app = createApp({
   auth: {},
 // HealthServiceProvider binds the container's `health` manager, which
 // HealthProvider then registers the database and storage checks into.
-  providers: [HealthServiceProvider, AuthProvider, HealthProvider],
+  providers: [HealthServiceProvider, AuthProvider, StashPropsProvider, HealthProvider],
   // Rendered into every server-rendered document. Replace public/favicon.svg
   // with your own artwork, or add more tags here (Open Graph, apple-touch-icon).
   inertia: {

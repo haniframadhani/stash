@@ -1,12 +1,10 @@
-import { ambientContainer, type HealthManager, type CheckResult } from '@guren/core'
-import { Router } from '@guren/core'
-import HomeController from '../app/Http/Controllers/HomeController.js'
+import { Router, ambientContainer, type HealthManager, type CheckResult } from '@guren/core'
+import { registerDriveRoutes } from './drive.js'
 import { registerAuthRoutes } from './auth.js'
 
 export function registerWebRoutes(router: Router): void {
   registerAuthRoutes(router)
-
-  router.get('/', [HomeController, 'index'])
+  registerDriveRoutes(router)
 
   // Health check for load balancers and uptime monitors: a real SELECT 1 on the
   // SQLite connection plus a write/read/delete round-trip on the configured

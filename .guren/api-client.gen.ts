@@ -12,9 +12,25 @@
  * `path` literal, the same string the server routes on.
  */
 export interface ApiRoutes {
-  'dashboard': {
+  'drive.index': {
     method: 'GET'
-    path: '/dashboard'
+    path: '/files'
+  }
+  'drive.recent': {
+    method: 'GET'
+    path: '/recent'
+  }
+  'drive.starred': {
+    method: 'GET'
+    path: '/starred'
+  }
+  'drive.trash': {
+    method: 'GET'
+    path: '/trash'
+  }
+  'home': {
+    method: 'GET'
+    path: '/'
   }
   'login': {
     method: 'GET'
@@ -255,7 +271,11 @@ export function createApiClient<TRoutes extends { [K in keyof TRoutes]: { method
 }
 
 const routes: Record<string, { method: string; path: string }> = {
-  'dashboard': { method: 'GET', path: '/dashboard' },
+  'drive.index': { method: 'GET', path: '/files' },
+  'drive.recent': { method: 'GET', path: '/recent' },
+  'drive.starred': { method: 'GET', path: '/starred' },
+  'drive.trash': { method: 'GET', path: '/trash' },
+  'home': { method: 'GET', path: '/' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },

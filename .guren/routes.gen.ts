@@ -2,7 +2,11 @@
 // Run `guren codegen` to regenerate.
 
 export const routeManifest = {
-  'dashboard': { method: 'GET', path: '/dashboard' },
+  'drive.index': { method: 'GET', path: '/files' },
+  'drive.recent': { method: 'GET', path: '/recent' },
+  'drive.starred': { method: 'GET', path: '/starred' },
+  'drive.trash': { method: 'GET', path: '/trash' },
+  'home': { method: 'GET', path: '/' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
@@ -56,7 +60,13 @@ export function route<TName extends RouteName>(name: TName, ...args: RouteArgs<T
 }
 
 export const routes = {
-  dashboard: (query?: RouteQuery) => route('dashboard', query),
+  drive: {
+    index: (query?: RouteQuery) => route('drive.index', query),
+    recent: (query?: RouteQuery) => route('drive.recent', query),
+    starred: (query?: RouteQuery) => route('drive.starred', query),
+    trash: (query?: RouteQuery) => route('drive.trash', query)
+  },
+  home: (query?: RouteQuery) => route('home', query),
   login: Object.assign(
     (query?: RouteQuery) => route('login', query),
     {

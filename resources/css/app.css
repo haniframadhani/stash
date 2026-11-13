@@ -1,2 +1,77 @@
 @import 'tailwindcss';
 @import './guren.css';
+
+/* Stash theme (docs/UI_SPEC.md §2): the Drive-like palette re-values the guren
+   tokens after the import, so every page keeps one set of g-* utilities and
+   `guren upgrade` cannot clobber the values (they live past the end marker). */
+:root {
+  --g-page: #ffffff;
+  --g-panel: #f6f8fc;
+  --g-raised: #ffffff;
+  --g-ink: #202124;
+  --g-line: #e3e6ec;
+  --g-line-strong: #d5d9e2;
+
+  --g-heading: #1f1f1f;
+  --g-text: #1f1f1f;
+  --g-text-2: #444746;
+  --g-muted: #5f6368;
+
+  --g-on-ink: #ffffff;
+  --g-on-ink-muted: #9aa0a6;
+
+  --g-accent: #0b57d0;
+  --g-accent-down: #0842a0;
+  --g-accent-text: #0b57d0;
+  --g-accent-tint: #d3e3fd;
+  --g-on-accent: #ffffff;
+
+  --g-ok: #146c2e;
+  --g-ok-chip: #146c2e;
+  --g-ok-tint: rgba(20, 108, 46, 0.1);
+  --g-warn: #b06000;
+  --g-warn-chip: #b06000;
+  --g-warn-tint: rgba(176, 96, 0, 0.1);
+  --g-danger: #b3261e;
+  --g-danger-chip: #b3261e;
+  --g-danger-tint: #fce8e6;
+
+  --g-tick: linear-gradient(180deg, #0b57d0, #0842a0);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --g-page: #131314;
+    --g-panel: #1e1f20;
+    --g-raised: #232425;
+    --g-ink: #0f0f10;
+    --g-line: #2d2f31;
+    --g-line-strong: #3c4043;
+
+    --g-heading: #e3e3e3;
+    --g-text: #e3e3e3;
+    --g-text-2: #c4c7c5;
+    --g-muted: #9aa0a6;
+
+    --g-on-ink: #e3e3e3;
+    --g-on-ink-muted: #9aa0a6;
+
+    --g-accent: #a8c7fa;
+    --g-accent-down: #8ab4f8;
+    --g-accent-text: #a8c7fa;
+    --g-accent-tint: #0842a0;
+    --g-on-accent: #062e6f;
+
+    --g-ok: #6dd58c;
+    --g-ok-chip: #6dd58c;
+    --g-ok-tint: rgba(109, 213, 140, 0.12);
+    --g-warn: #fdd663;
+    --g-warn-chip: #fdd663;
+    --g-warn-tint: rgba(253, 214, 99, 0.12);
+    --g-danger: #f2b8b5;
+    --g-danger-chip: #f2b8b5;
+    --g-danger-tint: rgba(242, 184, 181, 0.12);
+
+    --g-tick: linear-gradient(180deg, #a8c7fa, #0842a0);
+  }
+}

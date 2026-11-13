@@ -27,14 +27,15 @@ describe('auth', () => {
       email: 'owner@example.com',
       password: 'correct-horse-battery',
     })
-    response.assertRedirect('/dashboard')
+    // Post-login lands on the drive (TASKS 1.2).
+    response.assertRedirect('/files')
 
     // Login regenerates the session id; carry the new cookies, as a browser would.
     const cookie = response.headers
       .getSetCookie()
       .map((setCookie) => setCookie.split(';')[0] ?? '')
       .join('; ')
-    await browser.withHeaders({ Cookie: cookie }).get('/dashboard').assertOk()
+    await browser.withHeaders({ Cookie: cookie }).json().get('/files').assertInertia('drive/Index')
   })
 
   it('has no registration or password-reset routes', async () => {

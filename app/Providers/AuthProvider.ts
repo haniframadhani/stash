@@ -1,7 +1,6 @@
 import { ServiceProvider, shareInertiaProps, AUTH_CONTEXT_KEY } from '@guren/core'
 import type { AuthContext, AuthManager } from '@guren/core'
 import { User } from '../Models/User.js'
-import { probeCapabilities } from '../Services/ImageCapabilities.js'
 
 export default class AuthProvider extends ServiceProvider {
   register(): void {
@@ -23,10 +22,8 @@ export default class AuthProvider extends ServiceProvider {
     // Passing this.container scopes the props to this app.
     shareInertiaProps(async (ctx) => {
       const auth = ctx.get(AUTH_CONTEXT_KEY) as AuthContext | undefined
-      const capabilities = await probeCapabilities()
       return {
         auth: { user: await auth?.user() },
-        capabilities,
       }
     }, this.container)
   }

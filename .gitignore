@@ -11,3 +11,6 @@ docs/plans/**/*.html
 weed_data/*
 storage/app/
 public/storage
+test-results/
+playwright-report/
+tests/browser/.auth/
