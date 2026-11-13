@@ -13,13 +13,14 @@ This app has no `modules/` directory — all code lives at the application root.
 
 ```mermaid
 graph LR
-  m_app["app<br/>Folder, Image, User"]
+  m_app["app<br/>Folder, Image, ImageVersion, User"]
 ```
 
 ## app
 
-Models (3):
+Models (4):
 
 - Folder — app/Models/Folder.ts
 - Image — app/Models/Image.ts
+- ImageVersion — app/Models/ImageVersion.ts
 - User — app/Models/User.ts

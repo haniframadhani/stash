@@ -15,6 +15,7 @@ Model classes and their declared relationships, grouped by module. Attributes li
 classDiagram
   class Folder
   class Image
+  class ImageVersion
   class User {
     <<Authenticatable>>
   }
@@ -24,4 +25,5 @@ classDiagram
 
 - **Folder** (app/Models/Folder.ts) — table: `folders`
 - **Image** (app/Models/Image.ts) — table: `images`
+- **ImageVersion** (app/Models/ImageVersion.ts) — table: `imageVersions`
 - **User** (app/Models/User.ts) — table: `users`

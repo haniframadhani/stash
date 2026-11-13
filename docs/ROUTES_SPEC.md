@@ -110,6 +110,7 @@ Permanent deletes: objects first, then rows. On storage failure keep rows and re
 
 - Private routes: session + CSRF (Guren `auth: {}`) + `auth` alias (`requireAuthenticated({ redirectTo: '/login' })`).
 - Public image routes (`/i`, `/t`) must not issue `Set-Cookie`. If the global session/CSRF middleware attaches cookies to GETs, exclude these prefixes or register the routes outside it (task 1.3 settles the mechanism and records it in the decision log).
+  - Settled in 1.3: `createApp` runs with `autoSession: false, autoCsrf: false`, and `app/Providers/SessionCsrfProvider.ts` mounts the same session/CSRF middleware for every path except the `/i/`, `/t/`, `/p/` prefixes, which skip both entirely (the framework's CSRF middleware sets `XSRF-TOKEN` on every safe request and its session middleware re-issues the session cookie; `csrfOptions.exclude` cannot prevent either). `GET /health`, `/login` and `/logout` are unaffected.
 - The upload endpoints accept the CSRF token via the `X-XSRF-TOKEN` header (cookie `XSRF-TOKEN`).
 - Rate limiting (task 5.2): public routes get a generous per-IP limit; `POST /uploads` and `/images/:id/versions` a modest one.
 

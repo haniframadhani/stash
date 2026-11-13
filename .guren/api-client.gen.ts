@@ -32,6 +32,18 @@ export interface ApiRoutes {
     method: 'GET'
     path: '/'
   }
+  'image.latest': {
+    method: 'GET'
+    path: '/i/:publicId'
+  }
+  'image.show': {
+    method: 'GET'
+    path: '/i/:publicId/:file'
+  }
+  'image.thumb': {
+    method: 'GET'
+    path: '/t/:publicId/:file'
+  }
   'login': {
     method: 'GET'
     path: '/login'
@@ -276,6 +288,9 @@ const routes: Record<string, { method: string; path: string }> = {
   'drive.starred': { method: 'GET', path: '/starred' },
   'drive.trash': { method: 'GET', path: '/trash' },
   'home': { method: 'GET', path: '/' },
+  'image.latest': { method: 'GET', path: '/i/:publicId' },
+  'image.show': { method: 'GET', path: '/i/:publicId/:file' },
+  'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },

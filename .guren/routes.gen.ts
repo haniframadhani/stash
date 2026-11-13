@@ -7,6 +7,9 @@ export const routeManifest = {
   'drive.starred': { method: 'GET', path: '/starred' },
   'drive.trash': { method: 'GET', path: '/trash' },
   'home': { method: 'GET', path: '/' },
+  'image.latest': { method: 'GET', path: '/i/:publicId' },
+  'image.show': { method: 'GET', path: '/i/:publicId/:file' },
+  'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
@@ -67,6 +70,11 @@ export const routes = {
     trash: (query?: RouteQuery) => route('drive.trash', query)
   },
   home: (query?: RouteQuery) => route('home', query),
+  image: {
+    latest: (params: RouteParams<'image.latest'>, query?: RouteQuery) => route('image.latest', params, query),
+    show: (params: RouteParams<'image.show'>, query?: RouteQuery) => route('image.show', params, query),
+    thumb: (params: RouteParams<'image.thumb'>, query?: RouteQuery) => route('image.thumb', params, query)
+  },
   login: Object.assign(
     (query?: RouteQuery) => route('login', query),
     {
