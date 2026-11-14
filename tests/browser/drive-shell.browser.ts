@@ -35,6 +35,10 @@ test.describe('signed in', () => {
     // New opens the picker since task 1.4 (a plain file picker; the review
     // dialog arrives in 1.6).
     await expect(page.getByRole('button', { name: 'New', exact: true })).toBeEnabled()
+    // The images prop defers (task 1.5): either the grid lands after the
+    // partial reload or, on an empty drive, the empty state appears.
+    const gridOrEmpty = page.locator('main img[alt]').first().or(page.getByText('Drop images here or press New'))
+    await expect(gridOrEmpty).toBeVisible({ timeout: 15_000 })
     // Uploads persist between runs on the local database, so the empty state is
     // asserted only when the drive really is empty.
     if ((await page.locator('main img[alt]').count()) === 0) {

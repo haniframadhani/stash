@@ -1,4 +1,4 @@
-import { Controller } from '@guren/core'
+import { Controller, defer } from '@guren/core'
 import type { AppEnv } from '@guren/core'
 import { pages } from '@/.guren/pages.gen'
 import { Folder } from '../../Models/Folder.js'
@@ -41,10 +41,17 @@ async function toImageItems(images: ImageRecord[], urls: UrlBuilder): Promise<Im
 export default class DriveController extends Controller {
   async index(): Promise<Response> {
     const urls = UrlBuilder.fromEnv(this.make<AppEnv>('env'))
-    const [folders, images] = await Promise.all([this.rootFolders(), this.rootImages()])
     return this.inertia(
       pages.drive.Index,
-      { folder: null, breadcrumbs: [], folders, images: await toImageItems(images, urls) },
+      {
+        folder: null,
+        breadcrumbs: [],
+        folders: await this.rootFolders(),
+        // The grid is the page's slow part (one versions query plus N URL
+        // builds), so it defers: the shell and toolbar paint first, the images
+        // follow on the client's partial reload behind the skeleton.
+        images: defer(() => this.rootImages().then((images) => toImageItems(images, urls))),
+      },
       { title: 'My Files' },
     )
   }

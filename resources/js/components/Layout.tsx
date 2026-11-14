@@ -15,6 +15,7 @@ import {
 import { useCallback, useRef, useState, type PropsWithChildren } from "react";
 import { formatBytes } from "../lib/format.js";
 import Toasts, { type Toast } from "./drive/Toasts.js";
+import StorageBanner from "./drive/StorageBanner.js";
 import { uploadFile } from "./drive/upload.js";
 
 const NAV_ITEMS = [
@@ -253,6 +254,8 @@ export default function Layout({ children }: PropsWithChildren) {
         )}
       </header>
 
+      <StorageBanner />
+
       <div className="flex flex-1">
         <aside className="hidden w-64 shrink-0 border-r border-g-line bg-g-panel lg:block">
           <Sidebar activePath={url} onPickFiles={openPicker} />
@@ -260,11 +263,10 @@ export default function Layout({ children }: PropsWithChildren) {
 
         {drawerOpen && (
           <div className="fixed inset-0 z-30 lg:hidden">
-            {/* The scrim over the page ground: a black wash, the one color no
-                token covers, disabled with that reason for the lint rule. */}
-            {/* eslint-disable-next-line guren/no-raw-color */}
+            {/* The scrim over the page ground: the ink token dimmed, so the
+                wash follows the theme without a raw color. */}
             <div
-              className="absolute inset-0 bg-black/40"
+              className="absolute inset-0 bg-g-ink/60"
               onClick={() => setDrawerOpen(false)}
               aria-hidden
             />

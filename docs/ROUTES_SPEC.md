@@ -38,7 +38,7 @@ Common query params: `sort` = `name` \| `modified` \| `size` (default `name`), `
 | Path | Name | Props |
 |---|---|---|
 | `/` | `home` | redirect → `/files` |
-| `/files` and `/files/:folderId` | `drive.index` | `{ folder, breadcrumbs, folders, images }` |
+| `/files` and `/files/:folderId` | `drive.index` | `{ folder, breadcrumbs, folders, images }` — `images` is **deferred** (announced in `deferredProps`, fetched by the client's follow-up partial reload behind the skeleton state) |
 | `/recent` | `drive.recent` | `{ images }` (last 100 by `created_at`, grouped by day in the UI) |
 | `/starred` | `drive.starred` | `{ folders, images }` |
 | `/trash` | `drive.trash` | `{ folders, images }` (items whose parent is not itself trashed) |
