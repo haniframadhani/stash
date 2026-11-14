@@ -2,6 +2,7 @@
 // Run `guren codegen` to regenerate.
 
 import type { PageContract, PagePropsRecord } from '@guren/inertia-client'
+import type { ImageItem } from '../resources/js/types.js'
 import type { ValidationErrors } from '@guren/core'
 
 
@@ -51,7 +52,7 @@ export interface PagePropsMap {
   folder: null
   breadcrumbs: Crumb[]
   folders: FolderSummary[]
-  images: ImageSummary[]
+  images: ImageItem[]
 }
   'drive/Recent': {
   images: ImageSummary[]

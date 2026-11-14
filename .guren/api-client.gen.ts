@@ -66,6 +66,11 @@ export interface ApiRoutes {
     path: '/profile'
     body: { name: string; email: string; password?: string; currentPassword?: string }
   }
+  'uploads.store': {
+    method: 'POST'
+    path: '/uploads'
+    body: { format: unknown; quality: unknown; maxDimension: unknown; folderId: unknown; name: unknown }
+  }
 }
 
 export type ApiRouteName = keyof ApiRoutes
@@ -296,4 +301,5 @@ const routes: Record<string, { method: string; path: string }> = {
   'logout': { method: 'POST', path: '/logout' },
   'profile.edit': { method: 'GET', path: '/profile' },
   'profile.update': { method: 'PUT', path: '/profile' },
+  'uploads.store': { method: 'POST', path: '/uploads' },
 }

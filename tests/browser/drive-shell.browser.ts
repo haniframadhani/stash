@@ -25,17 +25,23 @@ test.describe('guest', () => {
 test.describe('signed in', () => {
   test.use({ storageState: AUTH_FILE })
 
-  test('the shell renders with sidebar, disabled New and the empty state', async ({ page }) => {
+  test('the shell renders with sidebar, upload-capable New and the empty state', async ({ page }) => {
     await gotoLanding(page, '/files')
 
     await expect(page.getByRole('navigation', { name: 'Drive' })).toBeVisible()
     for (const label of ['My Files', 'Recent', 'Starred', 'Trash']) {
       await expect(page.getByRole('navigation', { name: 'Drive' }).getByText(label)).toBeVisible()
     }
-    await expect(page.getByRole('button', { name: 'New', exact: true })).toBeDisabled()
-    await expect(page.getByText('Drop images here or press New')).toBeVisible()
-    // The storage meter placeholder with no data yet.
-    await expect(page.getByText(/0 B used · 0 images/u)).toBeVisible()
+    // New opens the picker since task 1.4 (a plain file picker; the review
+    // dialog arrives in 1.6).
+    await expect(page.getByRole('button', { name: 'New', exact: true })).toBeEnabled()
+    // Uploads persist between runs on the local database, so the empty state is
+    // asserted only when the drive really is empty.
+    if ((await page.locator('main img[alt]').count()) === 0) {
+      await expect(page.getByText('Drop images here or press New')).toBeVisible()
+    }
+    // The storage meter reads the shared prop either way.
+    await expect(page.getByText(/ used · \d+ images?$/u)).toBeVisible()
   })
 
   test('/dashboard is gone: /files is the only path', async ({ page }) => {

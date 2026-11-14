@@ -118,6 +118,8 @@ export interface ConvertResult {
   /** 320 px WebP thumbnail, first frame only. */
   thumb: Buffer
   format: StoredFormat
+  /** The sniffed input format, kept for `image_versions.original_format`. */
+  inputFormat: InputFormat
   mime: string
   ext: string
   /** Stored bytes. */
@@ -183,6 +185,7 @@ export async function convert(input: Buffer, options: ConvertOptions = {}): Prom
     if (choice === 'original') {
       return finish(input, await makeThumb(input, settings), {
         format: inputFormat,
+        inputFormat,
         width: sniffed.width ?? 0,
         height: sniffed.height ?? 0,
         isAnimated,
@@ -243,6 +246,7 @@ export async function convert(input: Buffer, options: ConvertOptions = {}): Prom
 
     return finish(data, await makeThumb(data, settings), {
       format: choice,
+      inputFormat,
       width: info.width,
       height: Math.round(info.height / frames),
       isAnimated,
@@ -254,7 +258,7 @@ export async function convert(input: Buffer, options: ConvertOptions = {}): Prom
 function finish(
   image: Buffer,
   thumb: Buffer,
-  parts: { format: StoredFormat, width: number, height: number, isAnimated: boolean, originalSize: number },
+  parts: { format: StoredFormat, inputFormat: InputFormat, width: number, height: number, isAnimated: boolean, originalSize: number },
 ): ConvertResult {
   const storedSize = image.length
   const savedBytes = parts.originalSize - storedSize
@@ -262,6 +266,7 @@ function finish(
     image,
     thumb,
     format: parts.format,
+    inputFormat: parts.inputFormat,
     mime: MIME[parts.format],
     ext: EXT[parts.format],
     size: storedSize,

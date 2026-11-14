@@ -15,6 +15,7 @@ export const routeManifest = {
   'logout': { method: 'POST', path: '/logout' },
   'profile.edit': { method: 'GET', path: '/profile' },
   'profile.update': { method: 'PUT', path: '/profile' },
+  'uploads.store': { method: 'POST', path: '/uploads' },
 } as const
 
 export type RouteManifest = typeof routeManifest
@@ -85,6 +86,9 @@ export const routes = {
   profile: {
     edit: (query?: RouteQuery) => route('profile.edit', query),
     update: (query?: RouteQuery) => route('profile.update', query)
+  },
+  uploads: {
+    store: (query?: RouteQuery) => route('uploads.store', query)
   }
 } as const
 
@@ -139,6 +143,7 @@ declare module '@guren/core' {
     routes: {
       'login.store': { body: { email: string; password: string; remember: boolean } }
       'profile.update': { body: { name: string; email: string; password: string; currentPassword: string } }
+      'uploads.store': { body: { format?: "webp" | "avif" | "original"; quality?: number; maxDimension?: number; folderId?: number; name?: string } }
     }
   }
 }

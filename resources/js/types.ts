@@ -28,6 +28,26 @@ export interface StashFlash {
   error?: string
 }
 
+/** One image card as the server sends it (ROUTES_SPEC §3 ImageItem; built by
+ *  app/Http/Resources/ImageItem.ts). Timestamps arrive as epoch ms. */
+export interface ImageItem {
+  id: number
+  publicId: string
+  name: string
+  folderId: number | null
+  starred: boolean
+  version: number
+  format: 'avif' | 'webp' | 'jpeg' | 'png' | 'gif'
+  mime: string
+  size: number
+  width: number
+  height: number
+  createdAt: number
+  updatedAt: number
+  deletedAt: number | null
+  urls: { thumb: string, permanent: string, latest: string, page: string }
+}
+
 export interface SharedProps {
   auth: { user: StashUser | null }
   capabilities: StashCapabilities

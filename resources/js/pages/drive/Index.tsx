@@ -2,8 +2,9 @@ import { Head } from '@inertiajs/react'
 import { ImagePlus } from 'lucide-react'
 import Layout from '../../components/Layout.js'
 import EmptyState from '../../components/drive/EmptyState.js'
+import type { ImageItem } from '../../types.js'
 
-// Keep the shapes narrow until task 1.4 swaps them for API Resources with URLs.
+// The shapes stay narrow; task 1.6/2.x grow them (versions, selection).
 interface Crumb {
   id: number | null
   name: string
@@ -14,17 +15,11 @@ interface FolderSummary {
   name: string
 }
 
-interface ImageSummary {
-  id: number
-  name: string
-  starred: boolean
-}
-
 interface Props {
   folder: null
   breadcrumbs: Crumb[]
   folders: FolderSummary[]
-  images: ImageSummary[]
+  images: ImageItem[]
 }
 
 export default function DriveIndex({ folders, images }: Props) {
@@ -47,19 +42,39 @@ export default function DriveIndex({ folders, images }: Props) {
             hint="Nothing is uploaded until you confirm it in the review dialog. Uploads are converted to WebP or AVIF and metadata such as GPS is removed."
           />
         ) : (
-          <ul className="flex flex-col gap-2">
-            {folders.map((folder) => (
-              <li key={`f${folder.id}`} className="rounded-g-card border border-g-line bg-g-panel px-4 py-2 text-g-text">
-                {folder.name}
-              </li>
-            ))}
-            {images.map((image) => (
-              <li key={`i${image.id}`} className="rounded-g-card border border-g-line bg-g-panel px-4 py-2 text-g-text">
-                {image.name}
-                {image.starred && <span className="ml-2 text-g-accent-text">★</span>}
-              </li>
-            ))}
-          </ul>
+          <>
+            {folders.length > 0 && (
+              <ul className="flex flex-col gap-2">
+                {folders.map((folder) => (
+                  <li key={`f${folder.id}`} className="rounded-g-card border border-g-line bg-g-panel px-4 py-2 text-g-text">
+                    {folder.name}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {/* Simple grid for now; ImageCard interactions land in 1.5/1.6
+                (UI_SPEC §ImageCard). width/height keep the layout stable. */}
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+              {images.map((image) => (
+                <li key={image.id} className="overflow-hidden rounded-g-card border border-g-line bg-g-panel">
+                  <img
+                    src={image.urls.thumb}
+                    alt={image.name}
+                    width={image.width}
+                    height={image.height}
+                    loading="lazy"
+                    className="aspect-[4/3] w-full object-cover"
+                  />
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <span className="truncate text-sm text-g-heading" title={image.name}>
+                      {image.name}
+                    </span>
+                    {image.starred && <span className="shrink-0 text-g-accent-text" aria-label="Starred">★</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
     </Layout>
