@@ -216,6 +216,53 @@ describe('thumbnail delivery', () => {
     await http.get(`/t/${seeded.publicId}/${seeded.slug}.webp`).assertNotFound()
     await http.get(`/t/${seeded.publicId}/${seeded.slug}.v1.png`).assertNotFound()
   })
+
+  it('serves the thumb of an AVIF image (thumbs are always WebP)', async () => {
+    // Seed an AVIF version. The ImageStore writes .webp thumbs for any version,
+    // so we set up the DB to match, then assert the thumb endpoint works.
+    const name = 'avif-demo.jpg'
+    const slug = toSlug(name)
+    const publicId = newPublicId()
+    const avifBytes = Buffer.from(`avif:${publicId}:${name}`)
+    const thumbBytes = Buffer.from(`avif-thumb:${publicId}`)
+    const keys = await ImageStore.fromContainer().putVersion({
+      publicId,
+      version: 1,
+      ext: 'avif',
+      mime: 'image/avif',
+      image: avifBytes,
+      thumb: thumbBytes,
+    })
+    const image = await Image.forceCreate({
+      name,
+      slug,
+      publicId,
+      currentVersion: 1,
+      deletedAt: null,
+    })
+    await ImageVersion.create({
+      format: 'avif',
+      mime: 'image/avif',
+      ext: 'avif',
+      size: avifBytes.length,
+      width: 10,
+      height: 10,
+      sha256: createHash('sha256').update(avifBytes).digest('hex'),
+      storageKey: keys.storageKey,
+      thumbKey: keys.thumbKey,
+      originalName: 'avif-demo.jpg',
+      originalFormat: 'jpeg',
+      originalSize: 1234,
+      convertOptions: '{}',
+    }, { set: { imageId: image.id, version: 1 } })
+
+    const response = await http.get(`/t/${publicId}/${slug}.v1.webp`).assertOk()
+      .assertHeader('Content-Type', 'image/webp')
+      .assertHeader('Cache-Control', 'public, max-age=31536000, immutable')
+      .assertHeader('Content-Disposition', `inline; filename="${slug}.v1.webp"`)
+      .assertHeaderMissing('Set-Cookie')
+    expect(await response.text()).toEqual(thumbBytes.toString())
+  })
 })
 
 describe('404 cases', () => {

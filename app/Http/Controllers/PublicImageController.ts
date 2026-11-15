@@ -54,8 +54,10 @@ export default class PublicImageController extends Controller {
     if (!version) return notFound()
 
     // The stored format is the format; no content negotiation. An extension
-    // that does not match the version's own is a stale link → 404.
-    if (input.parsed.ext !== undefined && input.parsed.ext !== version.ext) return notFound()
+    // that does not match the version's own is a stale link → 404. Thumbs are
+    // always `.webp` regardless of the stored format (IMAGE_PIPELINE.md §4), so
+    // the check only applies to the image itself.
+    if (!input.isThumb && input.parsed.ext !== undefined && input.parsed.ext !== version.ext) return notFound()
 
     const immutable = input.isThumb || input.parsed.kind === 'pinned'
     const etag = `"${version.sha256.slice(0, 16)}"`
@@ -75,11 +77,15 @@ export default class PublicImageController extends Controller {
 
     const disposition = this.request.query('download') === '1' ? 'attachment' : 'inline'
     const ext = input.isThumb ? THUMB_EXT : version.ext
+    // Thumbs are always WebP bytes even when the stored version is AVIF/WebP-
+    // less; the format names describe the version, the response describes the
+    // object actually served.
+    const contentType = input.isThumb ? 'image/webp' : version.mime
     return new Response(bodyBytes(bytes), {
       status: 200,
       headers: {
         ...cacheHeaders,
-        'Content-Type': version.mime,
+        'Content-Type': contentType,
         'Content-Length': String(bytes.length),
         'Content-Disposition': `${disposition}; filename="${versionedFileName(image.slug, version.version, ext)}"`,
         'X-Content-Type-Options': 'nosniff',

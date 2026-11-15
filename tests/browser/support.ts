@@ -1,10 +1,38 @@
-import type { Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 /** Written by the setup project and git-ignored: it holds a session cookie. */
 export const AUTH_FILE = 'tests/browser/.auth/user.json'
 
 /** The account db/seeders/browser-account.ts writes while `guren browser:serve` runs the app. */
 export const BROWSER_ACCOUNT_EMAIL = 'browser@example.test'
+
+/** A file to stage in the Review dialog (TASKS 1.6). */
+export interface BrowserFile {
+  name: string
+  mimeType: string
+  buffer: Buffer
+}
+
+/**
+ * New → Upload images → Review & convert dialog → Confirm, then waits until
+ * the queue panel reports every upload complete and clears itself. Nothing is
+ * sent before Confirm, so a caller can observe the dialog first by passing its
+ * own steps — this is the whole flow for tests that just need images stored.
+ */
+export async function reviewAndUpload(page: Page, files: BrowserFile[]): Promise<void> {
+  const chooser = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'New', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Upload images' }).click()
+  await (await chooser).setFiles(files)
+
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: `Upload ${files.length}`, exact: true }).click()
+  const complete = `${files.length} ${files.length === 1 ? 'upload' : 'uploads'} complete`
+  await expect(page.getByText(complete, { exact: true })).toBeVisible({ timeout: 60_000 })
+  // Drop the panel so a later batch in the same test starts clean.
+  const clear = page.getByRole('button', { name: 'Clear', exact: true })
+  if (await clear.isVisible().catch(() => false)) await clear.click()
+}
 
 /** Loaded from the app's env files by playwright.browser.config.ts, as the seeder reads it. */
 export function browserTestPassword(): string {

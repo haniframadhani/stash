@@ -3,7 +3,7 @@
 // `guren browser:map` rewrites generated/, never this.
 import { expect, test, type Page } from '@playwright/test'
 import sharp from 'sharp'
-import { AUTH_FILE } from './support'
+import { AUTH_FILE, reviewAndUpload } from './support'
 
 const SHOTS = process.env.GUREN_BROWSER_RUN
   ? `.guren/browser/${process.env.GUREN_BROWSER_RUN}/screenshots`
@@ -26,18 +26,10 @@ async function uploadPair(page: Page): Promise<{ small: string, large: string }>
   const stamp = Date.now()
   const small = `aaa-grid-${stamp}.jpg`
   const large = `zzz-grid-${stamp}.jpg`
-  const chooser = page.waitForEvent('filechooser')
-  await page.getByRole('button', { name: 'New', exact: true }).click()
-  await page.getByRole('menuitem', { name: 'Upload images' }).click()
-  await (await chooser).setFiles([
+  await reviewAndUpload(page, [
     { name: small, mimeType: 'image/jpeg', buffer: await solidJpeg(400, 280) },
     { name: large, mimeType: 'image/jpeg', buffer: await noiseJpeg(800, 500) },
   ])
-  // The small one uploads first and toasts first; wait for the last toast.
-  await expect(page.getByText(new RegExp(`${large.replace('.', '\\.')}: .+ → .+ \\(−\\d+%\\)$`, 'u'))).toBeVisible({
-    timeout: 30_000,
-  })
-  await expect(page.locator(`img[alt="${large}"]`)).toBeVisible({ timeout: 15_000 })
   return { small, large }
 }
 

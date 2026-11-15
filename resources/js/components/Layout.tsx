@@ -12,11 +12,25 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { useCallback, useRef, useState, type PropsWithChildren } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PropsWithChildren,
+} from "react";
+import { classifyReviewFiles, type ReviewRow } from "../lib/reviewFiles.js";
 import { formatBytes } from "../lib/format.js";
-import Toasts, { type Toast } from "./drive/Toasts.js";
+import type { SharedProps } from "../types.js";
 import StorageBanner from "./drive/StorageBanner.js";
-import { uploadFile } from "./drive/upload.js";
+import ReviewDialog, { type ReviewUpload } from "./drive/ReviewDialog.js";
+import UploadQueue from "./drive/UploadQueue.js";
+import DropOverlay from "./drive/DropOverlay.js";
+import {
+  enqueueUploads,
+  setOnUploaded,
+  useUploadQueue,
+} from "./drive/queueStore.js";
 
 const NAV_ITEMS = [
   { href: "/files", label: "My Files", icon: Files },
@@ -77,8 +91,8 @@ function StorageMeter({
   );
 }
 
-/** The accent New button and its one-command menu; task 1.6 grows more items
- *  (folder, upload with review). One accent fill per screen stays here. */
+/** The accent New button and its one-command menu; task 2.1 grows more items
+ *  (New folder). One accent fill per screen stays here. */
 function NewButton({ onPickFiles }: { onPickFiles: () => void }) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -155,57 +169,101 @@ function Sidebar({
 /** The Stash shell (UI_SPEC §1): sticky top bar, 256px sidebar that becomes a
  *  drawer below `lg`, storage meter. Login renders without this shell. */
 export default function Layout({ children }: PropsWithChildren) {
-  const { props, url } = usePage();
+  const { props: pageProps, url } = usePage();
+  // The page's own props (breadcrumbs) ride along on the shared ones.
+  const props = pageProps as SharedProps & {
+    breadcrumbs?: readonly { id: number | null; name: string }[];
+  };
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [reviewRows, setReviewRows] = useState<ReviewRow[] | null>(null);
+  const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const nextToastId = useRef(1);
+  const dragDepth = useRef(0);
 
-  const dismissToast = useCallback((id: number) => {
-    setToasts((current) => current.filter((toast) => toast.id !== id));
+  const openReview = useCallback(
+    (files: readonly File[]) => {
+      void classifyReviewFiles(files, {
+        avif: props.capabilities.avif,
+        maxUploadMb: props.capabilities.maxUploadMb,
+      }).then((rows) => setReviewRows(rows));
+    },
+    [props.capabilities.avif, props.capabilities.maxUploadMb],
+  );
+
+  // The queue survives navigation by living in a module store; the shell only
+  // subscribes and refreshes the open page's props as uploads land.
+  const queueItems = useUploadQueue();
+  useEffect(() => {
+    setOnUploaded(() => {
+      router.reload({
+        only: ["folder", "breadcrumbs", "folders", "images", "storage"],
+      });
+    });
+    return () => setOnUploaded(undefined);
   }, []);
 
-  const openPicker = useCallback(() => fileInputRef.current?.click(), []);
+  const confirmReview = useCallback((uploads: readonly ReviewUpload[]) => {
+    setReviewRows(null);
+    enqueueUploads(uploads);
+  }, []);
 
-  // Sequential on purpose: the server caps concurrent encodes, and task 1.6's
-  // queue brings the real (parallel, cancellable) behavior.
-  async function uploadFiles(files: FileList) {
-    const defaults = props.capabilities.defaults;
-    const quality =
-      defaults.format === "avif"
-        ? defaults.qualityAvif
-        : defaults.format === "webp"
-          ? defaults.qualityWebp
-          : undefined;
-    for (const file of Array.from(files)) {
-      const result = await uploadFile(file, {
-        format: defaults.format,
-        quality,
-      });
-      if (result.ok) {
-        setToasts((current) => [
-          ...current,
-          {
-            id: nextToastId.current++,
-            kind: "success",
-            text: `${result.name}: ${formatBytes(result.originalSize)} → ${formatBytes(result.storedSize)} (−${result.savedPercent}%)`,
-          },
-        ]);
-      } else {
-        setToasts((current) => [
-          ...current,
-          {
-            id: nextToastId.current++,
-            kind: "error",
-            text: `${result.name}: ${result.message}`,
-          },
-        ]);
+  // Window-wide drop and paste open the Review dialog (UI_SPEC §3, §4); the
+  // depth counter survives the enter/leave churn of child elements.
+  useEffect(() => {
+    const isFileDrag = (event: DragEvent) =>
+      Array.from(event.dataTransfer?.types ?? []).includes("Files");
+    const onDragEnter = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
+      dragDepth.current += 1;
+      setDragging(true);
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+    };
+    const onDragLeave = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
+      dragDepth.current -= 1;
+      if (dragDepth.current <= 0) {
+        dragDepth.current = 0;
+        setDragging(false);
       }
-    }
-    router.reload({
-      only: ["folder", "breadcrumbs", "folders", "images", "storage"],
-    });
-  }
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      dragDepth.current = 0;
+      setDragging(false);
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      if (files.length > 0) openReview(files);
+    };
+    const onPaste = (event: ClipboardEvent) => {
+      const files = Array.from(event.clipboardData?.files ?? []);
+      if (files.length > 0) {
+        event.preventDefault();
+        openReview(files);
+      }
+    };
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    window.addEventListener("paste", onPaste);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+      window.removeEventListener("paste", onPaste);
+    };
+  }, [openReview]);
+
+  // The last breadcrumb names the destination folder; root (empty crumbs on
+  // /files until task 2.1) is "My Files". Pages without breadcrumbs (Recent,
+  // Starred, Trash) get no destination in the dialog and overlay.
+  const folderName = props.breadcrumbs
+    ? props.breadcrumbs.at(-1)?.name ?? "My Files"
+    : undefined;
 
   const navButtonClass =
     "rounded-g-ctl border border-g-line-strong px-3 py-1 text-g-text transition hover:border-g-muted";
@@ -258,7 +316,7 @@ export default function Layout({ children }: PropsWithChildren) {
 
       <div className="flex flex-1">
         <aside className="hidden w-64 shrink-0 border-r border-g-line bg-g-panel lg:block">
-          <Sidebar activePath={url} onPickFiles={openPicker} />
+          <Sidebar activePath={url} onPickFiles={() => fileInputRef.current?.click()} />
         </aside>
 
         {drawerOpen && (
@@ -293,7 +351,7 @@ export default function Layout({ children }: PropsWithChildren) {
               <Sidebar
                 activePath={url}
                 onNavigate={() => setDrawerOpen(false)}
-                onPickFiles={openPicker}
+                onPickFiles={() => fileInputRef.current?.click()}
               />
             </div>
           </div>
@@ -302,8 +360,11 @@ export default function Layout({ children }: PropsWithChildren) {
         <main className="min-w-0 flex-1">{children}</main>
       </div>
 
+      {dragging && <DropOverlay folderName={folderName} />}
+
       {/* One picker for the whole shell; the value resets so re-picking the
-          same file fires onChange again. */}
+          same file fires onChange again. Picking only stages the Review
+          dialog — nothing is sent before Confirm. */}
       <input
         ref={fileInputRef}
         type="file"
@@ -312,12 +373,22 @@ export default function Layout({ children }: PropsWithChildren) {
         hidden
         onChange={(event) => {
           const { files } = event.target;
-          if (files && files.length > 0) void uploadFiles(files);
+          if (files && files.length > 0) openReview(Array.from(files));
           event.target.value = "";
         }}
       />
 
-      <Toasts toasts={toasts} onDismiss={dismissToast} />
+      {reviewRows && (
+        <ReviewDialog
+          rows={reviewRows}
+          caps={props.capabilities}
+          folderName={folderName}
+          onCancel={() => setReviewRows(null)}
+          onConfirm={confirmReview}
+        />
+      )}
+
+      <UploadQueue items={queueItems} />
     </div>
   );
 }
