@@ -38,7 +38,8 @@ Common query params: `sort` = `name` \| `modified` \| `size` (default `name`), `
 | Path | Name | Props |
 |---|---|---|
 | `/` | `home` | redirect → `/files` |
-| `/files` and `/files/:folderId` | `drive.index` | `{ folder, breadcrumbs, folders, images }` — `images` is **deferred** (announced in `deferredProps`, fetched by the client's follow-up partial reload behind the skeleton state) |
+| `/files` | `drive.index` | `{ folder, breadcrumbs, folders, images }` — `images` is **deferred** (announced in `deferredProps`, fetched by the client's follow-up partial reload behind the skeleton state) |
+| `/files/:folderId` | `drive.folder` | same page and props as `drive.index`, resolved by folder id (shared action pair; Guren codegen keys contracts by route name, so the two paths carry separate names — decision log 2026-11-15). Unknown or trashed id → 404 |
 | `/recent` | `drive.recent` | `{ images }` (last 100 by `created_at`, grouped by day in the UI) |
 | `/starred` | `drive.starred` | `{ folders, images }` |
 | `/trash` | `drive.trash` | `{ folders, images }` (items whose parent is not itself trashed) |

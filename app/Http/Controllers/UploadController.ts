@@ -6,6 +6,7 @@
 import { Controller, HttpException, ValidationException } from '@guren/core'
 import type { AppEnv } from '@guren/core'
 import type { ImageSettings } from '../../../config/images.js'
+import { Folder } from '../../Models/Folder.js'
 import { ImageItem } from '../Resources/ImageItem.js'
 import { ImageConversionError } from '../../Services/ImageErrors.js'
 import { UrlBuilder } from '../../Services/UrlBuilder.js'
@@ -16,6 +17,15 @@ export default class UploadController extends Controller {
     // Defense in depth: the route already sits behind the auth middleware.
     await this.auth.userOrFail()
     const { body } = this.validated('uploads.store')
+
+    // A destination folder the client invented (or that was trashed mid-queue)
+    // must not strand the image: reject before any conversion work.
+    if (body.folderId !== undefined) {
+      const folder = await Folder.find(body.folderId)
+      if (!folder || folder.deletedAt !== null) {
+        throw ValidationException.withMessages({ folderId: ['The destination folder does not exist.'] })
+      }
+    }
 
     const files = await this.files('file')
     if (files.length === 0) {

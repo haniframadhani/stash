@@ -1,19 +1,41 @@
 import { Router, requireAuthenticated } from '@guren/core'
 import HomeController from '../app/Http/Controllers/HomeController.js'
 import DriveController from '../app/Http/Controllers/DriveController.js'
+import FolderController from '../app/Http/Controllers/FolderController.js'
 import UploadController from '../app/Http/Controllers/UploadController.js'
+import { FolderIdParams, FolderStoreSchema, FolderUpdateSchema } from '../app/Http/Validators/FolderValidator.js'
 import { UploadOptionsSchema } from '../app/Http/Validators/UploadValidator.js'
 
 // The private drive pages (ROUTES_SPEC §3). `/` funnels into the drive; a guest
 // chasing it lands on `/files` and is sent to `/login` by its middleware.
 // `/dashboard` is gone: `/files` is the only path (2026-11-13).
+// `drive.index` and `drive.folder` share DriveController's action pair: Guren
+// codegen keys types by route name, so the two paths cannot share one name.
 export function registerDriveRoutes(router: Router): void {
   router.get('/', [HomeController, 'index']).name('home')
 
   router.get('/files', [DriveController, 'index'], requireAuthenticated({ redirectTo: '/login' })).name('drive.index')
+  router.get(
+    '/files/:folderId',
+    { name: 'drive.folder', middlewares: [requireAuthenticated({ redirectTo: '/login' })] },
+    [DriveController, 'folder'],
+  )
   router.get('/recent', [DriveController, 'recent'], requireAuthenticated({ redirectTo: '/login' })).name('drive.recent')
   router.get('/starred', [DriveController, 'starred'], requireAuthenticated({ redirectTo: '/login' })).name('drive.starred')
   router.get('/trash', [DriveController, 'trash'], requireAuthenticated({ redirectTo: '/login' })).name('drive.trash')
+
+  // folders.store / folders.update (ROUTES_SPEC §4): redirect responses for
+  // Inertia form posts; both mutations sit behind the auth middleware.
+  router.post(
+    '/folders',
+    { name: 'folders.store', body: FolderStoreSchema },
+    [FolderController, 'store'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
+  router.patch(
+    '/folders/:id',
+    { name: 'folders.update', params: FolderIdParams, body: FolderUpdateSchema },
+    [FolderController, 'update'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
 
   // uploads.store (ROUTES_SPEC §4): JSON only, one file per request.
   router.post(

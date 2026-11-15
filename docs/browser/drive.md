@@ -10,7 +10,8 @@ generated: { by: process:guren-browser-map }
 <!-- guren:browser routes -->
 | Method | Path | Name | Middleware | Page |
 | --- | --- | --- | --- | --- |
-| GET | /files | drive.index |  | drive/Index |
+| GET | /files | drive.index |  |  |
+| GET | /files/:folderId | drive.folder |  |  |
 | GET | /recent | drive.recent |  | drive/Recent |
 | GET | /starred | drive.starred |  | drive/Starred |
 | GET | /trash | drive.trash |  | drive/Trash |
@@ -19,7 +20,7 @@ generated: { by: process:guren-browser-map }
 ## How to reach it
 
 <!-- guren:browser reach -->
-Landmark: `GET /files` (drive.index), rendering `drive/Index`.
+Landmark: `GET /recent` (drive.recent), rendering `drive/Recent`.
 No middleware on the landmark.
 
 Middleware lists may be incomplete: Could not fully read usesMiddleware: inline-middleware.
@@ -34,6 +35,8 @@ None: no approved plan covers these routes. Outcomes are not inferred from names
 ## Charters
 
 One line per area to explore: one area, one posture, one sentence.
+
+- folder CRUD and navigation — happy path plus the refusals: empty/invalid name, unknown id (404), cycle errors on move; folder rows persist on the local database between runs.
 
 ## Gotchas
 

@@ -3,6 +3,7 @@ import { TestApp } from '@guren/testing'
 import app from '../../src/app.js'
 import { resetDatabase } from '../../config/database.js'
 import { User } from '../../app/Models/User.js'
+import { Folder } from '../../app/Models/Folder.js'
 import { Image } from '../../app/Models/Image.js'
 import { ImageVersion } from '../../app/Models/ImageVersion.js'
 import { newPublicId } from '../../app/Services/ImageStore.js'
@@ -66,7 +67,7 @@ describe('drive routes', () => {
     const response = await http.json().actingAs(owner).get('/files')
     const page = await response.json<{ props: Record<string, unknown>, deferredProps?: Record<string, string[]> }>()
     expect(page.props.folder).toBeNull()
-    expect(page.props.breadcrumbs).toEqual([])
+    expect(page.props.breadcrumbs).toEqual([{ id: null, name: 'My Files' }])
     expect(page.props.folders).toEqual([])
     expect(page.props.images).toBeUndefined()
     expect(page.deferredProps).toEqual({ default: ['images'] })
@@ -127,5 +128,66 @@ describe('drive routes', () => {
     await http.json().actingAs(owner).get('/recent').assertInertia('drive/Recent', { images: [] })
     await http.json().actingAs(owner).get('/starred').assertInertia('drive/Starred', { folders: [], images: [] })
     await http.json().actingAs(owner).get('/trash').assertInertia('drive/Trash', { folders: [], images: [] })
+  })
+
+  it('renders a folder page with its breadcrumb chain and children', async () => {
+    const owner = await User.create({ name: 'Owner', email: 'owner@example.com', password: 'correct-horse-battery' })
+    const a = await Folder.create({ name: 'Trips' })
+    const b = await Folder.create({ name: '2024', parentId: a.id })
+    await seedImage('Beach', 100)
+
+    // Beach lives in Trips: it must appear there, not at the root.
+    await Image.where({ id: (await Image.where({ name: 'Beach' }).firstOrFail()).id }).update({ folderId: a.id })
+
+    const full = await (await http.json().actingAs(owner).get(`/files/${a.id}`)).json<{
+      props: Record<string, unknown>, deferredProps?: Record<string, string[]>,
+    }>()
+    expect(full.props.folder).toMatchObject({ id: a.id, name: 'Trips', parentId: null })
+    expect(full.props.breadcrumbs).toEqual([
+      { id: null, name: 'My Files' },
+      { id: a.id, name: 'Trips' },
+    ])
+    expect(full.props.folders).toMatchObject([{ id: b.id, name: '2024' }])
+    expect(full.deferredProps).toEqual({ default: ['images'] })
+
+    const partial = await http
+      .json()
+      .actingAs(owner)
+      .withHeaders({
+        'X-Inertia': 'true',
+        'X-Inertia-Partial-Component': 'drive/Index',
+        'X-Inertia-Partial-Data': 'images',
+      })
+      .get(`/files/${a.id}`)
+    const page = await partial.json<{ props: { images: Array<{ name: string }> } }>()
+    expect(page.props.images.map((image) => image.name)).toEqual(['Beach'])
+  })
+
+  it('keeps root images out of folder pages', async () => {
+    const owner = await User.create({ name: 'Owner', email: 'owner@example.com', password: 'correct-horse-battery' })
+    const folder = await Folder.create({ name: 'Trips' })
+    await seedImage('Root beach', 100)
+
+    const partial = await http
+      .json()
+      .actingAs(owner)
+      .withHeaders({
+        'X-Inertia': 'true',
+        'X-Inertia-Partial-Component': 'drive/Index',
+        'X-Inertia-Partial-Data': 'images',
+      })
+      .get(`/files/${folder.id}`)
+    const page = await partial.json<{ props: { images: unknown[] } }>()
+    expect(page.props.images).toEqual([])
+  })
+
+  it('sends an unknown or trashed folder id to the 404 page', async () => {
+    const owner = await User.create({ name: 'Owner', email: 'owner@example.com', password: 'correct-horse-battery' })
+    // `deletedAt` is server-chosen (never request input), so it lands via set.
+    const trashed = await Folder.create({ name: 'Gone' }, { set: { deletedAt: Date.now() } })
+
+    await http.json().actingAs(owner).get('/files/99999').assertNotFound()
+    await http.json().actingAs(owner).get(`/files/${trashed.id}`).assertNotFound()
+    await http.json().actingAs(owner).get('/files/not-a-number').assertNotFound()
   })
 })

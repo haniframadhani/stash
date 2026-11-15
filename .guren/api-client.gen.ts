@@ -12,6 +12,10 @@
  * `path` literal, the same string the server routes on.
  */
 export interface ApiRoutes {
+  'drive.folder': {
+    method: 'GET'
+    path: '/files/:folderId'
+  }
   'drive.index': {
     method: 'GET'
     path: '/files'
@@ -27,6 +31,16 @@ export interface ApiRoutes {
   'drive.trash': {
     method: 'GET'
     path: '/trash'
+  }
+  'folders.store': {
+    method: 'POST'
+    path: '/folders'
+    body: { name: string; parentId: unknown }
+  }
+  'folders.update': {
+    method: 'PATCH'
+    path: '/folders/:id'
+    body: { name?: string; parentId: unknown }
   }
   'home': {
     method: 'GET'
@@ -288,10 +302,13 @@ export function createApiClient<TRoutes extends { [K in keyof TRoutes]: { method
 }
 
 const routes: Record<string, { method: string; path: string }> = {
+  'drive.folder': { method: 'GET', path: '/files/:folderId' },
   'drive.index': { method: 'GET', path: '/files' },
   'drive.recent': { method: 'GET', path: '/recent' },
   'drive.starred': { method: 'GET', path: '/starred' },
   'drive.trash': { method: 'GET', path: '/trash' },
+  'folders.store': { method: 'POST', path: '/folders' },
+  'folders.update': { method: 'PATCH', path: '/folders/:id' },
   'home': { method: 'GET', path: '/' },
   'image.latest': { method: 'GET', path: '/i/:publicId' },
   'image.show': { method: 'GET', path: '/i/:publicId/:file' },

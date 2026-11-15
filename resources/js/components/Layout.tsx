@@ -3,6 +3,7 @@ import {
   Cloud,
   Files,
   Clock,
+  FolderPlus,
   ImagePlus,
   Star,
   Trash2,
@@ -24,6 +25,7 @@ import { formatBytes } from "../lib/format.js";
 import type { SharedProps } from "../types.js";
 import StorageBanner from "./drive/StorageBanner.js";
 import ReviewDialog, { type ReviewUpload } from "./drive/ReviewDialog.js";
+import NewFolderDialog from "./drive/NewFolderDialog.js";
 import UploadQueue from "./drive/UploadQueue.js";
 import DropOverlay from "./drive/DropOverlay.js";
 import {
@@ -91,9 +93,15 @@ function StorageMeter({
   );
 }
 
-/** The accent New button and its one-command menu; task 2.1 grows more items
- *  (New folder). One accent fill per screen stays here. */
-function NewButton({ onPickFiles }: { onPickFiles: () => void }) {
+/** The accent New button and its menu (UI_SPEC §4: New folder, Upload images).
+ *  One accent fill per screen stays here. */
+function NewButton({
+  onPickFiles,
+  onNewFolder,
+}: {
+  onPickFiles: () => void;
+  onNewFolder: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -103,6 +111,10 @@ function NewButton({ onPickFiles }: { onPickFiles: () => void }) {
   const scheduleClose = () => {
     cancelClose();
     closeTimer.current = setTimeout(() => setOpen(false), 150);
+  };
+  const pick = (action: () => void) => {
+    setOpen(false);
+    action();
   };
   return (
     <div
@@ -129,10 +141,16 @@ function NewButton({ onPickFiles }: { onPickFiles: () => void }) {
           <button
             type="button"
             role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              onPickFiles();
-            }}
+            onClick={() => pick(onNewFolder)}
+            className="flex w-full items-center gap-2 rounded-g-ctl px-3 py-2 text-sm text-g-text transition hover:bg-g-raised hover:text-g-heading"
+          >
+            <FolderPlus className="h-4 w-4" aria-hidden />
+            New folder
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => pick(onPickFiles)}
             className="flex w-full items-center gap-2 rounded-g-ctl px-3 py-2 text-sm text-g-text transition hover:bg-g-raised hover:text-g-heading"
           >
             <ImagePlus className="h-4 w-4" aria-hidden />
@@ -148,15 +166,17 @@ function Sidebar({
   activePath,
   onNavigate,
   onPickFiles,
+  onNewFolder,
 }: {
   activePath: string;
   onNavigate?: () => void;
   onPickFiles: () => void;
+  onNewFolder: () => void;
 }) {
   const { props } = usePage();
   return (
     <div className="flex h-full flex-col gap-4 px-3 py-4">
-      <NewButton onPickFiles={onPickFiles} />
+      <NewButton onPickFiles={onPickFiles} onNewFolder={onNewFolder} />
       <SidebarNav activePath={activePath} onNavigate={onNavigate} />
       <StorageMeter
         usedBytes={props.storage.usedBytes}
@@ -170,12 +190,15 @@ function Sidebar({
  *  drawer below `lg`, storage meter. Login renders without this shell. */
 export default function Layout({ children }: PropsWithChildren) {
   const { props: pageProps, url } = usePage();
-  // The page's own props (breadcrumbs) ride along on the shared ones.
+  // The drive pages' own props ride along on the shared ones; `folder` is
+  // undefined on pages that are not inside the drive.
   const props = pageProps as SharedProps & {
+    folder?: { id: number } | null;
     breadcrumbs?: readonly { id: number | null; name: string }[];
   };
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [reviewRows, setReviewRows] = useState<ReviewRow[] | null>(null);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
@@ -202,10 +225,21 @@ export default function Layout({ children }: PropsWithChildren) {
     return () => setOnUploaded(undefined);
   }, []);
 
-  const confirmReview = useCallback((uploads: readonly ReviewUpload[]) => {
-    setReviewRows(null);
-    enqueueUploads(uploads);
-  }, []);
+  const confirmReview = useCallback(
+    (uploads: readonly ReviewUpload[]) => {
+      setReviewRows(null);
+      // Every upload lands in the folder being browsed (ROUTES_SPEC §4
+      // folderId); at root nothing is sent, which the server reads as root.
+      const folderId = props.folder?.id;
+      enqueueUploads(
+        uploads.map((upload) => ({
+          ...upload,
+          folderId: folderId === undefined ? undefined : folderId,
+        })),
+      );
+    },
+    [props.folder?.id],
+  );
 
   // Window-wide drop and paste open the Review dialog (UI_SPEC §3, §4); the
   // depth counter survives the enter/leave churn of child elements.
@@ -258,9 +292,9 @@ export default function Layout({ children }: PropsWithChildren) {
     };
   }, [openReview]);
 
-  // The last breadcrumb names the destination folder; root (empty crumbs on
-  // /files until task 2.1) is "My Files". Pages without breadcrumbs (Recent,
-  // Starred, Trash) get no destination in the dialog and overlay.
+  // The last breadcrumb names the destination folder (root is "My Files").
+  // Pages without breadcrumbs (Recent, Starred, Trash) get no destination in
+  // the dialog and overlay.
   const folderName = props.breadcrumbs
     ? props.breadcrumbs.at(-1)?.name ?? "My Files"
     : undefined;
@@ -316,7 +350,11 @@ export default function Layout({ children }: PropsWithChildren) {
 
       <div className="flex flex-1">
         <aside className="hidden w-64 shrink-0 border-r border-g-line bg-g-panel lg:block">
-          <Sidebar activePath={url} onPickFiles={() => fileInputRef.current?.click()} />
+          <Sidebar
+            activePath={url}
+            onPickFiles={() => fileInputRef.current?.click()}
+            onNewFolder={() => setNewFolderOpen(true)}
+          />
         </aside>
 
         {drawerOpen && (
@@ -352,6 +390,10 @@ export default function Layout({ children }: PropsWithChildren) {
                 activePath={url}
                 onNavigate={() => setDrawerOpen(false)}
                 onPickFiles={() => fileInputRef.current?.click()}
+                onNewFolder={() => {
+                  setDrawerOpen(false);
+                  setNewFolderOpen(true);
+                }}
               />
             </div>
           </div>
@@ -385,6 +427,14 @@ export default function Layout({ children }: PropsWithChildren) {
           folderName={folderName}
           onCancel={() => setReviewRows(null)}
           onConfirm={confirmReview}
+        />
+      )}
+
+      {newFolderOpen && (
+        <NewFolderDialog
+          parentId={props.folder?.id ?? null}
+          destinationName={folderName ?? "My Files"}
+          onCancel={() => setNewFolderOpen(false)}
         />
       )}
 

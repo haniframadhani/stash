@@ -18,7 +18,7 @@ Page references are attributed to the controller action whose body makes the cal
 | Page | Props | Routes |
 |------|-------|--------|
 | auth/Login | { email?: string errors?: ValidationErrors<'email' \| 'password'> } | GET /login → LoginController.show |
-| drive/Index | { folder: null breadcrumbs: Crumb[] folders: FolderSummary[] images?: ImageItem[] } | GET /files → DriveController.index |
+| drive/Index | { folder: FolderItem \| null breadcrumbs: Crumb[] folders: FolderItem[] images?: ImageItem[] } |  |
 | drive/Recent | { images: ImageSummary[] } | GET /recent → DriveController.recent |
 | drive/Starred | { folders: { id: number, name: string }[] images: ImageSummary[] } | GET /starred → DriveController.starred |
 | drive/Trash | { folders: { id: number, name: string }[] images: { id: number, name: string, starred: boolean }[] } | GET /trash → DriveController.trash |

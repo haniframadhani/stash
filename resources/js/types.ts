@@ -48,6 +48,24 @@ export interface ImageItem {
   urls: { thumb: string, permanent: string, latest: string, page: string }
 }
 
+/** One folder card as the server sends it (ROUTES_SPEC §3 FolderItem; built by
+ *  app/Http/Resources/FolderItem.ts). Timestamps arrive as epoch ms. Folders
+ *  have no star in v1 and no server-built URLs; the client links to /files/:id. */
+export interface FolderItem {
+  id: number
+  parentId: number | null
+  name: string
+  createdAt: number
+  updatedAt: number
+  deletedAt: number | null
+}
+
+/** One breadcrumb (ROUTES_SPEC §3 Crumb); `id: null` is "My Files". */
+export interface Crumb {
+  id: number | null
+  name: string
+}
+
 export interface SharedProps {
   auth: { user: StashUser | null }
   capabilities: StashCapabilities
