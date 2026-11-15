@@ -28,7 +28,7 @@ Limits (env, validated in `config/env.ts`):
 
 Rules:
 - `original` stores the sniffed input bytes unchanged. It still strips nothing, so the dialog warns that metadata (including GPS) is kept. Prefer converting. Only the five accepted formats are allowed.
-- **Animated inputs** (GIF, animated WebP): `webp` keeps animation (`sharp` `animated: true`); `avif` is **disabled** in the UI and rejected by the server (verify support in task 1.1 and record it); `original` keeps as is. Thumbnails use the first frame.
+- **Animated inputs** (GIF, animated WebP): `webp` keeps animation (`sharp` `animated: true`); `avif` is **disabled** in the UI and rejected by the server — verified in task 1.1: sharp 0.35.5 encodes animated AVIF without error but **flattens it to a single frame** (output `pages: 1`), so allowing it would silently lose the animation; `original` keeps as is. Thumbnails use the first frame.
 - Capability probe at boot: try encoding a 16×16 image to each format. Result `{ webp: bool, avif: bool }` is a shared Inertia prop. The server rejects an unavailable format with `422`.
 - AVIF uses a moderate `effort` (about 4) to keep encodes fast. Make it an env value (`AVIF_EFFORT`).
 

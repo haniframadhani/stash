@@ -8,7 +8,6 @@
 export type TranslationKey =
   | 'auth.throttle'
   | 'auth.too_many_requests'
-  | 'messages.welcome'
 
 // Type this app's translation helpers via declaration merging:
 // `this.t()` / `this.tc()` in controllers and `useTranslation()` in pages

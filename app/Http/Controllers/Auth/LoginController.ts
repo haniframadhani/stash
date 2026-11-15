@@ -18,12 +18,14 @@ export default class LoginController extends Controller {
       throw ValidationException.withMessages({ message: 'Invalid credentials.' })
     }
 
-    return this.redirect('/dashboard')
+    return this.redirect('/files')
   }
 
   async destroy(): Promise<Response> {
     await this.auth.logout()
     this.auth.session()?.invalidate()
-    return this.redirect('/')
+    // Logging out must not bounce through a protected page: straight to the
+    // sign-in card (TASKS 1.2 AC).
+    return this.redirect('/login')
   }
 }

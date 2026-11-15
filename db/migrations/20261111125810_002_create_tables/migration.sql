@@ -6,7 +6,7 @@ CREATE TABLE `folders` (
 	`updated_at` text NOT NULL,
 	`deleted_at` integer
 );
---> statement-break
+--> statement-breakpoint
 CREATE TABLE `images` (
 	`id` integer PRIMARY KEY AUTOINCREMENT,
 	`public_id` text NOT NULL UNIQUE,
@@ -19,7 +19,7 @@ CREATE TABLE `images` (
 	`updated_at` text NOT NULL,
 	`deleted_at` integer
 );
---> statement-break
+--> statement-breakpoint
 CREATE TABLE `image_versions` (
 	`id` integer PRIMARY KEY AUTOINCREMENT,
 	`image_id` integer NOT NULL REFERENCES `images`(`id`),
@@ -39,17 +39,24 @@ CREATE TABLE `image_versions` (
 	`convert_options` text NOT NULL,
 	`created_at` text NOT NULL
 );
---> statement-break
+--> statement-breakpoint
 CREATE INDEX `folders_deleted_at_idx` ON `folders` (`deleted_at`);
---> statement-break
+--> statement-breakpoint
 CREATE INDEX `folders_parent_id_idx` ON `folders` (`parent_id`);
---> statement-break
+--> statement-breakpoint
 CREATE INDEX `images_deleted_at_idx` ON `images` (`deleted_at`);
+--> statement-breakpoint
 -- Unique active-sibling names, case-insensitive, excluding deleted. COALESCE handles NULL parent (= root).
-CREATE UNIQUE INDEX `uq_folders_name` ON `folders` (`COALESCE(parent_id, 0), name COLLATE NOCASE`) WHERE `deleted_at` IS NULL;
---> statement-break
-CREATE UNIQUE INDEX `uq_images_name` ON `images` (`COALESCE(folder_id, 0), name COLLATE NOCASE`) WHERE `deleted_at` IS NULL;
---> statement-break
+-- Each expression term is parenthesized: SQLite rejects a column list that
+-- mixes a bare function expression with a column (verified 2026-11-12; the
+-- original syntax made this migration fail before creating any table).
+-- Every statement ends with its own break marker (the bun migrator runs only
+-- a chunk's first statement, so trailing statements are silently dropped).
+CREATE UNIQUE INDEX `uq_folders_name` ON `folders` ((COALESCE(`parent_id`, 0)), `name` COLLATE NOCASE) WHERE `deleted_at` IS NULL;
+--> statement-breakpoint
+CREATE UNIQUE INDEX `uq_images_name` ON `images` ((COALESCE(`folder_id`, 0)), `name` COLLATE NOCASE) WHERE `deleted_at` IS NULL;
+--> statement-breakpoint
 CREATE INDEX `image_versions_image_id_idx` ON `image_versions` (`image_id`);
+--> statement-breakpoint
 -- UNIQUE(image_id, version)
 CREATE UNIQUE INDEX `uq_image_versions_image_version` ON `image_versions` (`image_id`, `version`);

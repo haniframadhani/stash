@@ -10,9 +10,8 @@ describe('app', () => {
     http = await TestApp.fromApp(app)
   })
 
-  it('serves the translated home page', async () => {
-    const response = await http.get('/').assertOk()
-    await response.assertBodyContains('Welcome to')
+  it('funnels the app root into the drive', async () => {
+    await http.get('/').assertRedirect('/files')
   })
 
   it('answers the health check', async () => {

@@ -25,3 +25,16 @@ export const profileUpdateForm: RouteFormContract<'profile.update', 'PUT', '/pro
     currentPassword: { type: 'string', required: false },
   },
 }
+
+export const uploadsStoreForm: RouteFormContract<'uploads.store', 'POST', '/uploads', ApiRoutes['uploads.store']['body']> = {
+  route: 'uploads.store',
+  method: 'POST',
+  path: '/uploads',
+  fields: {
+    format: { type: 'object', required: true },
+    quality: { type: 'object', required: true },
+    maxDimension: { type: 'object', required: true },
+    folderId: { type: 'object', required: true },
+    name: { type: 'object', required: true },
+  },
+}

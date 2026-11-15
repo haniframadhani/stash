@@ -2,12 +2,20 @@
 // Run `guren codegen` to regenerate.
 
 export const routeManifest = {
-  'dashboard': { method: 'GET', path: '/dashboard' },
+  'drive.index': { method: 'GET', path: '/files' },
+  'drive.recent': { method: 'GET', path: '/recent' },
+  'drive.starred': { method: 'GET', path: '/starred' },
+  'drive.trash': { method: 'GET', path: '/trash' },
+  'home': { method: 'GET', path: '/' },
+  'image.latest': { method: 'GET', path: '/i/:publicId' },
+  'image.show': { method: 'GET', path: '/i/:publicId/:file' },
+  'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
   'profile.edit': { method: 'GET', path: '/profile' },
   'profile.update': { method: 'PUT', path: '/profile' },
+  'uploads.store': { method: 'POST', path: '/uploads' },
 } as const
 
 export type RouteManifest = typeof routeManifest
@@ -56,7 +64,18 @@ export function route<TName extends RouteName>(name: TName, ...args: RouteArgs<T
 }
 
 export const routes = {
-  dashboard: (query?: RouteQuery) => route('dashboard', query),
+  drive: {
+    index: (query?: RouteQuery) => route('drive.index', query),
+    recent: (query?: RouteQuery) => route('drive.recent', query),
+    starred: (query?: RouteQuery) => route('drive.starred', query),
+    trash: (query?: RouteQuery) => route('drive.trash', query)
+  },
+  home: (query?: RouteQuery) => route('home', query),
+  image: {
+    latest: (params: RouteParams<'image.latest'>, query?: RouteQuery) => route('image.latest', params, query),
+    show: (params: RouteParams<'image.show'>, query?: RouteQuery) => route('image.show', params, query),
+    thumb: (params: RouteParams<'image.thumb'>, query?: RouteQuery) => route('image.thumb', params, query)
+  },
   login: Object.assign(
     (query?: RouteQuery) => route('login', query),
     {
@@ -67,6 +86,9 @@ export const routes = {
   profile: {
     edit: (query?: RouteQuery) => route('profile.edit', query),
     update: (query?: RouteQuery) => route('profile.update', query)
+  },
+  uploads: {
+    store: (query?: RouteQuery) => route('uploads.store', query)
   }
 } as const
 
@@ -121,6 +143,7 @@ declare module '@guren/core' {
     routes: {
       'login.store': { body: { email: string; password: string; remember: boolean } }
       'profile.update': { body: { name: string; email: string; password: string; currentPassword: string } }
+      'uploads.store': { body: { format?: "webp" | "avif" | "original"; quality?: number; maxDimension?: number; folderId?: number; name?: string } }
     }
   }
 }

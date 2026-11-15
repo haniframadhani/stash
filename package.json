@@ -20,7 +20,8 @@
     "db:migrate": "bunx guren db:migrate",
     "db:reset": "bunx guren db:reset",
     "db:status": "bunx guren db:status",
-    "db:seed": "bunx guren db:seed"
+    "db:seed": "bunx guren db:seed",
+    "test:browser": "playwright test -c playwright.browser.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1164.0",
@@ -30,13 +31,16 @@
     "@guren/orm": "^2.15.0",
     "@inertiajs/react": "^3.11.0",
     "drizzle-orm": "1.0.0-rc.4",
+    "lucide-react": "^1.70.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sharp": "^0.35.5",
     "zod": "^4.5.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "~4.14.0",
     "@guren/testing": "^1.14.4",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/vite": "^4.2.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

@@ -12,9 +12,37 @@
  * `path` literal, the same string the server routes on.
  */
 export interface ApiRoutes {
-  'dashboard': {
+  'drive.index': {
     method: 'GET'
-    path: '/dashboard'
+    path: '/files'
+  }
+  'drive.recent': {
+    method: 'GET'
+    path: '/recent'
+  }
+  'drive.starred': {
+    method: 'GET'
+    path: '/starred'
+  }
+  'drive.trash': {
+    method: 'GET'
+    path: '/trash'
+  }
+  'home': {
+    method: 'GET'
+    path: '/'
+  }
+  'image.latest': {
+    method: 'GET'
+    path: '/i/:publicId'
+  }
+  'image.show': {
+    method: 'GET'
+    path: '/i/:publicId/:file'
+  }
+  'image.thumb': {
+    method: 'GET'
+    path: '/t/:publicId/:file'
   }
   'login': {
     method: 'GET'
@@ -37,6 +65,11 @@ export interface ApiRoutes {
     method: 'PUT'
     path: '/profile'
     body: { name: string; email: string; password?: string; currentPassword?: string }
+  }
+  'uploads.store': {
+    method: 'POST'
+    path: '/uploads'
+    body: { format: unknown; quality: unknown; maxDimension: unknown; folderId: unknown; name: unknown }
   }
 }
 
@@ -255,10 +288,18 @@ export function createApiClient<TRoutes extends { [K in keyof TRoutes]: { method
 }
 
 const routes: Record<string, { method: string; path: string }> = {
-  'dashboard': { method: 'GET', path: '/dashboard' },
+  'drive.index': { method: 'GET', path: '/files' },
+  'drive.recent': { method: 'GET', path: '/recent' },
+  'drive.starred': { method: 'GET', path: '/starred' },
+  'drive.trash': { method: 'GET', path: '/trash' },
+  'home': { method: 'GET', path: '/' },
+  'image.latest': { method: 'GET', path: '/i/:publicId' },
+  'image.show': { method: 'GET', path: '/i/:publicId/:file' },
+  'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
   'profile.edit': { method: 'GET', path: '/profile' },
   'profile.update': { method: 'PUT', path: '/profile' },
+  'uploads.store': { method: 'POST', path: '/uploads' },
 }

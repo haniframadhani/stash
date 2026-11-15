@@ -15,13 +15,18 @@ import { registerWebRoutes } from '../routes/web.js'
 import storage from '../config/storage.js'
 import session from '../config/session.js'
 import AuthProvider from '../app/Providers/AuthProvider.js'
+import StashPropsProvider from '../app/Providers/StashPropsProvider.js'
+import SessionCsrfProvider from '../app/Providers/SessionCsrfProvider.js'
 import HealthProvider from '../app/Providers/HealthProvider.js'
 
 const app = createApp({
-  auth: {},
+  // Session and CSRF are mounted by SessionCsrfProvider instead, which skips
+  // the public delivery prefixes (/i, /t, /p) so image responses carry no
+  // Set-Cookie. autoCsrf must follow autoSession for the same reason.
+  auth: { autoSession: false, autoCsrf: false },
 // HealthServiceProvider binds the container's `health` manager, which
 // HealthProvider then registers the database and storage checks into.
-  providers: [HealthServiceProvider, AuthProvider, HealthProvider],
+  providers: [HealthServiceProvider, AuthProvider, StashPropsProvider, SessionCsrfProvider, HealthProvider],
   // Rendered into every server-rendered document. Replace public/favicon.svg
   // with your own artwork, or add more tags here (Open Graph, apple-touch-icon).
   inertia: {

@@ -2,13 +2,17 @@
 // Run `guren codegen` to regenerate.
 
 import type { PageContract, PagePropsRecord } from '@guren/inertia-client'
+import type { DriveView } from '../resources/js/lib/driveView.js'
+import type { ImageItem } from '../resources/js/types.js'
 import type { ValidationErrors } from '@guren/core'
 
 
 export const pageManifest = {
   'auth/Login': './pages/auth/Login.tsx',
-  'dashboard/Index': './pages/dashboard/Index.tsx',
-  'Home': './pages/Home.tsx',
+  'drive/Index': './pages/drive/Index.tsx',
+  'drive/Recent': './pages/drive/Recent.tsx',
+  'drive/Starred': './pages/drive/Starred.tsx',
+  'drive/Trash': './pages/drive/Trash.tsx',
   'profile/Edit': './pages/profile/Edit.tsx',
 } as const
 
@@ -22,6 +26,21 @@ export function isPageId(value: string): value is PageId {
   return Object.prototype.hasOwnProperty.call(pageManifest, value)
 }
 
+interface ImageSummary {
+  id: number
+  name: string
+  starred: boolean
+}
+
+interface Crumb {
+  id: number | null
+  name: string
+}
+
+interface FolderSummary {
+  id: number
+  name: string
+}
 /**
  * Auto-extracted Props types from page components.
  */
@@ -30,11 +49,22 @@ export interface PagePropsMap {
   email?: string
   errors?: ValidationErrors<'email' | 'password'>
 }
-  'dashboard/Index': {
-  user?: { id: number; name: string; email: string } | null
+  'drive/Index': {
+  folder: null
+  breadcrumbs: Crumb[]
+  folders: FolderSummary[]
+  images?: ImageItem[]
 }
-  'Home': {
-  message: string
+  'drive/Recent': {
+  images: ImageSummary[]
+}
+  'drive/Starred': {
+  folders: { id: number, name: string }[]
+  images: ImageSummary[]
+}
+  'drive/Trash': {
+  folders: { id: number, name: string }[]
+  images: { id: number, name: string, starred: boolean }[]
 }
   'profile/Edit': {
   profile: { name: string; email: string }
@@ -64,10 +94,12 @@ export const pages = {
   auth: {
     Login: defineGeneratedPage<'auth/Login', PagePropsMap['auth/Login']>('auth/Login', pageManifest['auth/Login'])
   },
-  dashboard: {
-    Index: defineGeneratedPage<'dashboard/Index', PagePropsMap['dashboard/Index']>('dashboard/Index', pageManifest['dashboard/Index'])
+  drive: {
+    Index: defineGeneratedPage<'drive/Index', PagePropsMap['drive/Index']>('drive/Index', pageManifest['drive/Index']),
+    Recent: defineGeneratedPage<'drive/Recent', PagePropsMap['drive/Recent']>('drive/Recent', pageManifest['drive/Recent']),
+    Starred: defineGeneratedPage<'drive/Starred', PagePropsMap['drive/Starred']>('drive/Starred', pageManifest['drive/Starred']),
+    Trash: defineGeneratedPage<'drive/Trash', PagePropsMap['drive/Trash']>('drive/Trash', pageManifest['drive/Trash'])
   },
-  Home: defineGeneratedPage<'Home', PagePropsMap['Home']>('Home', pageManifest['Home']),
   profile: {
     Edit: defineGeneratedPage<'profile/Edit', PagePropsMap['profile/Edit']>('profile/Edit', pageManifest['profile/Edit'])
   }
