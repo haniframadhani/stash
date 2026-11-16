@@ -87,10 +87,10 @@ Rules: name 1 to 255 chars, trimmed, no `/` or `\`. Create and move auto-suffix 
 | POST | `/uploads` | `uploads.store` | multipart: `file`, `format`, `quality?`, `maxDimension?`, `folderId?`, `name?` | **J** 201 `{ image, originalSize, storedSize, savedBytes, savedPercent }` |
 | POST | `/images/:id/versions` | `images.replace` | multipart: `file`, `format`, `quality?`, `maxDimension?` | **J** 201 `{ image, originalSize, storedSize, savedBytes, savedPercent }` |
 | POST | `/images/:id/versions/:version/restore` | `images.restoreVersion` | none | **R** (moves `current_version`) |
-| PATCH | `/images/:id` | `images.update` | `{ name?, folderId?, starred? }` | **R** |
+| PATCH | `/images/:id` | `images.update` | `{ name?, folderId?, starred? }` (task 2.2 ships `name`; `folderId` arrives with 2.4 Move, `starred` with 4.1 Star) | **R** |
 
 - Upload errors (Guren's standard shapes): `413` too large, `415` unsupported type, `422` validation (bad option, unavailable format, pixel cap, AVIF on animated input), `503` storage unavailable. The UI shows `message` per file with a Retry.
-- Renaming an image updates `name` and `slug`; it does **not** bump the version.
+- Renaming an image updates `name` and `slug`; it does **not** bump the version, so every permanent URL keeps resolving (lookups match `publicId`, the slug is cosmetic). A rename onto an existing sibling name is a `422` on `name`, shown inline. `:id` must be an active image — unknown or trashed → `404`.
 - Replace requires the image to be active (not trashed).
 
 ### Bulk (body `{ imageIds: number[], folderIds: number[] }`, max 500 total)

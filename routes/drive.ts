@@ -2,8 +2,10 @@ import { Router, requireAuthenticated } from '@guren/core'
 import HomeController from '../app/Http/Controllers/HomeController.js'
 import DriveController from '../app/Http/Controllers/DriveController.js'
 import FolderController from '../app/Http/Controllers/FolderController.js'
+import ImageController from '../app/Http/Controllers/ImageController.js'
 import UploadController from '../app/Http/Controllers/UploadController.js'
 import { FolderIdParams, FolderStoreSchema, FolderUpdateSchema } from '../app/Http/Validators/FolderValidator.js'
+import { ImageIdParams, ImageUpdateSchema } from '../app/Http/Validators/ImageValidator.js'
 import { UploadOptionsSchema } from '../app/Http/Validators/UploadValidator.js'
 
 // The private drive pages (ROUTES_SPEC §3). `/` funnels into the drive; a guest
@@ -35,6 +37,14 @@ export function registerDriveRoutes(router: Router): void {
     '/folders/:id',
     { name: 'folders.update', params: FolderIdParams, body: FolderUpdateSchema },
     [FolderController, 'update'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
+
+  // images.update (ROUTES_SPEC §4): rename only until Move (2.4) and Star
+  // (4.1) grow the contract; the redirect keeps the browser on the folder.
+  router.patch(
+    '/images/:id',
+    { name: 'images.update', params: ImageIdParams, body: ImageUpdateSchema },
+    [ImageController, 'update'],
   ).middleware(requireAuthenticated({ redirectTo: '/login' }))
 
   // uploads.store (ROUTES_SPEC §4): JSON only, one file per request.

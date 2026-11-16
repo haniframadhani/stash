@@ -23,6 +23,15 @@ export const foldersUpdateForm: RouteFormContract<'folders.update', 'PATCH', '/f
   },
 }
 
+export const imagesUpdateForm: RouteFormContract<'images.update', 'PATCH', '/images/:id', ApiRoutes['images.update']['body']> = {
+  route: 'images.update',
+  method: 'PATCH',
+  path: '/images/:id',
+  fields: {
+    name: { type: 'string', required: false, minLength: 1, maxLength: 255 },
+  },
+}
+
 export const loginStoreForm: RouteFormContract<'login.store', 'POST', '/login', ApiRoutes['login.store']['body']> = {
   route: 'login.store',
   method: 'POST',

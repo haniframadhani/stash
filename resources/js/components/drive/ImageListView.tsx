@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react'
 import type { ImageItem } from '../../types.js'
 import { formatBytes, formatRelative } from '../../lib/format.js'
 import type { DriveView, SortKey } from '../../lib/driveView.js'
+import RenameInput, { type RenameTarget } from './RenameInput.js'
 
 const SORT_LABELS: Record<SortKey, string> = {
   name: 'Name',
@@ -44,10 +45,24 @@ export default function ImageListView({
   images,
   view,
   onChange,
+  renaming = null,
+  renameValue,
+  renameError,
+  onRenameDone,
+  onRenameCancel,
+  onHoverChange,
 }: {
   images: ImageItem[]
   view: DriveView
   onChange: (patch: Partial<DriveView>) => void
+  /** Inline rename (task 2.2): F2 targets whichever row the pointer is on; the
+   *  ⋮ menu is grid-only, the list carries no menu column. */
+  renaming?: RenameTarget | null
+  renameValue?: string
+  renameError?: string | null
+  onRenameDone?: () => void
+  onRenameCancel?: () => void
+  onHoverChange?: (id: number, hovered: boolean) => void
 }) {
   const ariaSort = (sortKey: SortKey): 'ascending' | 'descending' | undefined => {
     if (view.sort !== sortKey) return undefined
@@ -74,7 +89,12 @@ export default function ImageListView({
         </thead>
         <tbody>
           {images.map((image) => (
-            <tr key={image.id} className="border-b border-g-line last:border-b-0 hover:bg-g-raised">
+            <tr
+              key={image.id}
+              className="border-b border-g-line last:border-b-0 hover:bg-g-raised"
+              onMouseEnter={onHoverChange ? () => onHoverChange(image.id, true) : undefined}
+              onMouseLeave={onHoverChange ? () => onHoverChange(image.id, false) : undefined}
+            >
               <td className="px-3 py-1.5">
                 <img
                   src={image.urls.thumb}
@@ -87,7 +107,17 @@ export default function ImageListView({
                 />
               </td>
               <td className="max-w-[16rem] truncate px-3 py-2 text-g-heading" title={image.name}>
-                {image.name}
+                {renaming?.id === image.id ? (
+                  <RenameInput
+                    target={{ kind: 'image', id: image.id }}
+                    initialName={renameValue ?? image.name}
+                    error={renameError ?? null}
+                    onDone={onRenameDone ?? (() => {})}
+                    onCancel={onRenameCancel ?? (() => {})}
+                  />
+                ) : (
+                  image.name
+                )}
               </td>
               <td className="px-3 py-2 text-xs font-bold uppercase text-g-muted">{image.format}</td>
               <td className="px-3 py-2 font-mono text-xs text-g-text-2">

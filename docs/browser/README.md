@@ -28,6 +28,7 @@ Routes in no feature:
 - `GET /` (home): Its action renders nothing, and neither does its controller.
 - `POST /folders` (folders.store): Its action renders nothing, and neither does its controller.
 - `PATCH /folders/:id` (folders.update): Its action renders nothing, and neither does its controller.
+- `PATCH /images/:id` (images.update): Its action renders nothing, and neither does its controller.
 - `POST /uploads` (uploads.store): Its action renders nothing, and neither does its controller.
 - `GET /health`: Not handled by a controller action.
 <!-- /guren:browser index -->

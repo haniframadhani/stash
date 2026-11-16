@@ -50,11 +50,17 @@ test.describe('grid and list', () => {
     const { small } = await uploadPair(page)
 
     // Card anatomy (UI_SPEC §4): format badge on the thumb, hover checkbox,
-    // the disabled ⋮ slot, the name below, and an explicit width/height so
-    // nothing shifts while the thumb loads.
+    // the ⋮ menu (live since task 2.2), the name below, and an explicit
+    // width/height so nothing shifts while the thumb loads.
     const card = page.locator('main li', { has: page.locator(`img[alt="${small}"]`) })
     await expect(card.getByText('webp', { exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: `More actions for ${small}` })).toBeDisabled()
+    const menu = page.getByRole('button', { name: `More actions for ${small}` })
+    await card.hover()
+    await expect(menu).toBeEnabled()
+    await menu.click()
+    await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeHidden()
 
     const box = card.locator('input[type="checkbox"]')
     await card.hover()

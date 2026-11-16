@@ -1,6 +1,6 @@
 import { Deferred, Head, usePage } from '@inertiajs/react'
 import { ImagePlus } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Layout from '../../components/Layout.js'
 import Breadcrumbs from '../../components/drive/Breadcrumbs.js'
 import EmptyState from '../../components/drive/EmptyState.js'
@@ -10,6 +10,8 @@ import ImageListView from '../../components/drive/ImageListView.js'
 import DriveSkeleton from '../../components/drive/DriveSkeleton.js'
 import SortMenu from '../../components/drive/SortMenu.js'
 import ViewToggle from '../../components/drive/ViewToggle.js'
+import type { RenameTarget } from '../../components/drive/RenameInput.js'
+import { clearRenameAttempt, takeFailedRename } from '../../components/drive/RenameInput.js'
 import type { Crumb, FolderItem, ImageItem } from '../../types.js'
 import { driveViewUrl, readDriveView, sortImages, type DriveView } from '../../lib/driveView.js'
 
@@ -23,12 +25,75 @@ interface Props {
 }
 
 export default function DriveIndex({ folder, breadcrumbs, folders, images }: Props) {
-  // View and sort live in the URL query (`view`, `sort`, `order`; ROUTES_SPEC
-  // §3), so a refresh keeps them. React owns the state and rewrites the
-  // address bar in place — an Inertia visit here would re-defer the images.
-  const { url } = usePage()
+  const { url, props } = usePage()
   const [viewState, setViewState] = useState<DriveView>(() => readDriveView(url))
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set())
+
+  // Inline rename (task 2.2): F2 on hovered card or ⋮ menu; shared across grid/list.
+  const [renaming, setRenaming] = useState<RenameTarget | null>(null)
+  const [hovered, setHovered] = useState<RenameTarget | null>(null)
+  // A failed rename comes back from the framework's redirect as the page's
+  // flashed `errors.name` (Validation guide), so the input reopens with it.
+  const [renameFailure, setRenameFailure] = useState<{ target: RenameTarget, attemptedName: string, message: string } | null>(null)
+  const serverErrors = (props as { errors?: Record<string, string> }).errors
+
+  useEffect(() => {
+    const failed = takeFailedRename(serverErrors)
+    if (!failed) {
+      clearRenameAttempt()
+      return
+    }
+    setRenaming(failed.attempt.target)
+    setRenameFailure({ target: failed.attempt.target, attemptedName: failed.attempt.name, message: failed.message })
+  }, [serverErrors])
+
+  const startRename = useCallback((target: RenameTarget) => {
+    setRenameFailure(null)
+    setRenaming(target)
+  }, [])
+
+  const finishRename = useCallback(() => {
+    setRenaming(null)
+    setRenameFailure(null)
+    clearRenameAttempt()
+  }, [])
+
+  const renameProps = (target: RenameTarget): { renaming: boolean, renameValue?: string, renameError: string | null } => {
+    const failed = renameFailure && renameFailure.target.kind === target.kind && renameFailure.target.id === target.id
+      ? renameFailure
+      : null
+    return {
+      renaming: renaming?.kind === target.kind && renaming.id === target.id,
+      renameValue: failed?.attemptedName,
+      renameError: failed?.message ?? null,
+    }
+  }
+
+  // F2 starts rename on hovered item.
+  useEffect(() => {
+    if (renaming !== null) return
+    const target = hovered
+    if (!target) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'F2') return
+      // Never while typing (New-folder dialog, the rename input itself).
+      const tag = (event.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (event.target as HTMLElement | null)?.isContentEditable) return
+      event.preventDefault()
+      startRename(target)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [renaming, hovered, startRename])
+
+  const hoverFolder = useCallback((id: number, h: boolean) => {
+    if (h) setHovered({ kind: 'folder', id })
+    else setHovered((prev) => prev && prev.kind === 'folder' && prev.id === id ? null : prev)
+  }, [])
+  const hoverImage = useCallback((id: number, h: boolean) => {
+    if (h) setHovered({ kind: 'image', id })
+    else setHovered((prev) => prev && prev.kind === 'image' && prev.id === id ? null : prev)
+  }, [])
 
   const updateView = useCallback((patch: Partial<DriveView>) => {
     setViewState((previous) => {
@@ -77,7 +142,15 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images }: Pro
               <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-g-muted">Folders</h2>
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {folders.map((child) => (
-                  <FolderCard key={`f${child.id}`} folder={child} />
+                  <FolderCard
+                    key={`f${child.id}`}
+                    folder={child}
+                    {...renameProps({ kind: 'folder', id: child.id })}
+                    onStartRename={() => startRename({ kind: 'folder', id: child.id })}
+                    onRenameDone={finishRename}
+                    onRenameCancel={finishRename}
+                    onHoverChange={(h) => hoverFolder(child.id, h)}
+                  />
                 ))}
               </ul>
             </section>
@@ -97,11 +170,34 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images }: Pro
                     image={image}
                     selected={selectedIds.has(image.id)}
                     onToggleSelect={() => toggleSelect(image.id)}
+                    {...renameProps({ kind: 'image', id: image.id })}
+                    onStartRename={() => startRename({ kind: 'image', id: image.id })}
+                    onRenameDone={finishRename}
+                    onRenameCancel={finishRename}
+                    onHoverChange={(h) => hoverImage(image.id, h)}
                   />
                 ))}
               </ul>
             ) : sorted.length > 0 ? (
-              <ImageListView images={sorted} view={viewState} onChange={updateView} />
+              <ImageListView
+                images={sorted}
+                view={viewState}
+                onChange={updateView}
+                renaming={renaming?.kind === 'image' ? renaming : null}
+                renameValue={
+                  renameFailure?.target.kind === 'image' && renameFailure.target.id === renaming?.id
+                    ? renameFailure.attemptedName
+                    : undefined
+                }
+                renameError={
+                  renameFailure?.target.kind === 'image' && renameFailure.target.id === renaming?.id
+                    ? renameFailure.message
+                    : null
+                }
+                onRenameDone={finishRename}
+                onRenameCancel={finishRename}
+                onHoverChange={hoverImage}
+              />
             ) : null}
           </Deferred>
         </div>

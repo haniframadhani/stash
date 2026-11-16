@@ -58,6 +58,11 @@ export interface ApiRoutes {
     method: 'GET'
     path: '/t/:publicId/:file'
   }
+  'images.update': {
+    method: 'PATCH'
+    path: '/images/:id'
+    body: { name?: string }
+  }
   'login': {
     method: 'GET'
     path: '/login'
@@ -313,6 +318,7 @@ const routes: Record<string, { method: string; path: string }> = {
   'image.latest': { method: 'GET', path: '/i/:publicId' },
   'image.show': { method: 'GET', path: '/i/:publicId/:file' },
   'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
+  'images.update': { method: 'PATCH', path: '/images/:id' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
