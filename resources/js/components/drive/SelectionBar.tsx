@@ -1,14 +1,16 @@
-import { X } from 'lucide-react'
+import { X, MoveRight } from 'lucide-react'
 
-/** The floating action bar (TASKS 2.3, UI_SPEC §1/§10). It carries the count
- *  and the clear action for now; Copy link, Move, Star and Trash join it with
- *  tasks 3.3, 2.4, 4.1 and 4.2 — hidden until they work, never dead. */
+/** The floating action bar (TASKS 2.3, UI_SPEC §1/§10). It carries the count,
+ *  the clear action and the Move action (task 2.4); Copy link, Star and Trash
+ *  join it with tasks 3.3, 4.1 and 4.2 — hidden until they work, never dead. */
 export default function SelectionBar({
   count,
   onClear,
+  onMove,
 }: {
   count: number
   onClear: () => void
+  onMove: () => void
 }) {
   if (count === 0) return null
   return (
@@ -30,6 +32,15 @@ export default function SelectionBar({
         <p role="status" aria-live="polite" className="text-sm font-bold text-g-heading">
           {count} selected
         </p>
+        <button
+          type="button"
+          onClick={onMove}
+          aria-label="Move selected items"
+          className="flex items-center gap-1.5 rounded-full bg-g-accent px-2.5 py-1 text-xs font-bold text-g-on-accent transition hover:opacity-95"
+        >
+          <MoveRight className="h-4 w-4" aria-hidden />
+          Move
+        </button>
       </div>
     </div>
   )

@@ -32,6 +32,17 @@ export const imagesUpdateForm: RouteFormContract<'images.update', 'PATCH', '/ima
   },
 }
 
+export const itemsMoveForm: RouteFormContract<'items.move', 'POST', '/items/move', ApiRoutes['items.move']['body']> = {
+  route: 'items.move',
+  method: 'POST',
+  path: '/items/move',
+  fields: {
+    imageIds: { type: 'array', required: false },
+    folderIds: { type: 'array', required: false },
+    targetFolderId: { type: 'object', required: true },
+  },
+}
+
 export const loginStoreForm: RouteFormContract<'login.store', 'POST', '/login', ApiRoutes['login.store']['body']> = {
   route: 'login.store',
   method: 'POST',

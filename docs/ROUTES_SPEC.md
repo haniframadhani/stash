@@ -38,7 +38,7 @@ Common query params: `sort` = `name` \| `modified` \| `size` (default `name`), `
 | Path | Name | Props |
 |---|---|---|
 | `/` | `home` | redirect → `/files` |
-| `/files` | `drive.index` | `{ folder, breadcrumbs, folders, images }` — `images` is **deferred** (announced in `deferredProps`, fetched by the client's follow-up partial reload behind the skeleton state) |
+| `/files` | `drive.index` | `{ folder, breadcrumbs, folders, images, moveTargets }` — `images` is **deferred** (announced in `deferredProps`, fetched by the client's follow-up partial reload behind the skeleton state); `moveTargets` is every active folder (task 2.4's "Move to…" picker) |
 | `/files/:folderId` | `drive.folder` | same page and props as `drive.index`, resolved by folder id (shared action pair; Guren codegen keys contracts by route name, so the two paths carry separate names — decision log 2026-11-15). Unknown or trashed id → 404 |
 | `/recent` | `drive.recent` | `{ images }` (last 100 by `created_at`, grouped by day in the UI) |
 | `/starred` | `drive.starred` | `{ folders, images }` |
@@ -96,7 +96,7 @@ Rules: name 1 to 255 chars, trimmed, no `/` or `\`. Create and move auto-suffix 
 ### Bulk (body `{ imageIds: number[], folderIds: number[] }`, max 500 total)
 | Method | Path | Name | Extra | Result |
 |---|---|---|---|---|
-| POST | `/items/move` | `items.move` | `targetFolderId: number \| null` | **R** (atomic; whole request rejected on `CYCLE`) |
+| POST | `/items/move` | `items.move` | `targetFolderId: number \| null` (null = root) | **R** (atomic; whole request rejected on `CYCLE` or a name clash) |
 | POST | `/items/star` | `items.star` | `starred: boolean` (images only) | **R** |
 | POST | `/items/trash` | `items.trash` | | **R** |
 | POST | `/items/restore` | `items.restore` | | **R** |
@@ -104,6 +104,8 @@ Rules: name 1 to 255 chars, trimmed, no `/` or `\`. Create and move auto-suffix 
 | DELETE | `/trash` | `trash.empty` | | **R** permanent delete of everything in trash |
 
 Permanent deletes: objects first, then rows. On storage failure keep rows and return an error flash.
+
+`items.move` (task 2.4): one transaction moves every image and folder; items already in `targetFolderId` are no-ops and are not counted. A folder into itself or a descendant → `targetFolderId` `CYCLE`; an unknown/trashed item → `items`; a name clash with an active sibling in the destination (case-insensitive) → `targetFolderId`. No clash is auto-suffixed — a move is a relocation, not a create. The redirect lands on the source folder of the first moved item, so the browser never depends on `Referer`.
 
 ---
 

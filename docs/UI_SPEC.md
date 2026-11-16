@@ -29,7 +29,7 @@ Goal: feel like Google Drive / OneDrive for images. Light, calm, content-first. 
 ```
 
 - Sidebar 256px on `lg+`, a drawer below `lg`. Top bar and toolbar are sticky. `⎋` is log out.
-- Selection mode shows a floating action bar at the bottom of the view with the count and a clear action (`✕  3 selected`); `🔗 Copy link`, `➜ Move`, `★ Star` and `🗑 Trash` join it once those actions exist. On mobile it sticks to the bottom edge.
+- Selection mode shows a floating action bar at the bottom of the view with the count and a clear action (`✕  3 selected`); **Move** (task 2.4) is live, and `🔗 Copy link`, `★ Star` and `🗑 Trash` join it once those actions exist. On mobile it sticks to the bottom edge.
 
 ## 2. Visual tokens
 
@@ -83,7 +83,9 @@ Opens when files are dropped, pasted, or chosen. **Nothing is uploaded until Con
 
 **Breadcrumbs:** clickable; each crumb is a drop target. Collapse middle segments with `…` beyond 4.
 
-**FolderCard:** a 56px pill (icon, name, ⋮). Double-click or Enter opens. Highlights when dragged over.
+**FolderCard:** a 56px pill (icon, name, ⋮). Click or Enter opens. A drag source (the folder moves) and a drop target (a dragged selection moves into it); highlights while a drag is over it.
+
+**Move to… picker:** a small centered dialog listing every active folder as a depth-indented `<select>`, `My Files` (root) first. Moving a folder disables itself and its descendants; the current folder is disabled (a no-op). Confirm posts `items.move`; Cancel or a backdrop click closes without a request.
 
 **ImageCard (grid):** `aspect-[4/3]` thumbnail (`object-cover`, explicit width/height from the DB to avoid layout shift), file name below, a small format badge (`AVIF` / `WEBP`), star badge if starred. Checkbox top-left on hover or when selected. ⋮ top-right. Thumbnails use the permanent thumb URL.
 
@@ -127,7 +129,9 @@ List newest first: `v3 (current) · AVIF · 610 KB · 2 days ago`, with actions:
 
 - Click selects; double-click opens; on touch, tap opens when nothing is selected, else toggles selection.
 - Ctrl/Cmd+click toggle, Shift+click range, Ctrl/Cmd+A all, Esc clear.
-- Dragging a selection drags all of it, with a count badge.
+- Dragging a selection drags all of it, with a count badge. Dragging a folder card drags that folder.
+- Drop targets: a FolderCard, any breadcrumb crumb, and the sidebar's *My Files* (root). A drop moves the dragged items there and never navigates.
+- The selection bar's **Move** opens the picker; the choice is optimistic (items hide immediately) and rolls back with an error toast if the request fails. Success shows "Moved N items".
 - Drag from the OS shows the drop overlay. Dropping onto a FolderCard preselects that folder in the Review dialog.
 - Optimistic UI for star, rename, move, trash (local state, rollback on error). Everything else uses Inertia navigation and partial reloads (`only`).
 - Context menu: Open · Share · Download · Rename · Replace image… · Move to… · Star · Move to trash. In Trash: Restore · Delete forever.

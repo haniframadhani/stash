@@ -69,12 +69,18 @@ export async function breadcrumbsFor(folder: FolderRecord): Promise<Crumb[]> {
 }
 
 /** The new parent chain must never reach back to `folderId`: walking up from
- *  the target parent covers self, a child, and any deep descendant in one loop. */
-async function assertNotDescendant(folderId: number, newParentId: number | null): Promise<void> {
+ *  the target parent covers self, a child, and any deep descendant in one loop.
+ *  `field` names the failing input, so a bulk move can report it on
+ *  `targetFolderId` while folders.update reports it on `parentId`. */
+export async function assertNotDescendant(
+  folderId: number,
+  newParentId: number | null,
+  field = 'parentId',
+): Promise<void> {
   let cursor = newParentId
   for (let depth = 0; cursor !== null && depth < MAX_DEPTH; depth++) {
     if (cursor === folderId) {
-      throw ValidationException.withMessages({ parentId: ['A folder cannot be moved into one of its subfolders (CYCLE).'] })
+      throw ValidationException.withMessages({ [field]: ['A folder cannot be moved into one of its subfolders (CYCLE).'] })
     }
     const row: FolderRecord | null = await Folder.find(cursor)
     if (!row) return

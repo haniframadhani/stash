@@ -60,6 +60,9 @@ export default class DriveController extends Controller {
 
   private async renderDrive(folderId: number | null): Promise<Response> {
     const urls = UrlBuilder.fromEnv(this.make<AppEnv>('env'))
+    // The "Move to…" picker needs every active folder, not only the current
+    // folder's children; the client builds the tree from this flat list.
+    const moveTargets = await this.allFolders()
 
     if (folderId === null) {
       return this.inertia(
@@ -68,6 +71,7 @@ export default class DriveController extends Controller {
           folder: null,
           breadcrumbs: [{ id: null, name: 'My Files' }],
           folders: await this.childFolders(null),
+          moveTargets,
           // The grid is the page's slow part (one versions query plus N URL
           // builds), so it defers: the shell and toolbar paint first, the images
           // follow on the client's partial reload behind the skeleton.
@@ -85,6 +89,7 @@ export default class DriveController extends Controller {
         folder: new FolderItem(folder).toJSON(),
         breadcrumbs: await breadcrumbsFor(folder),
         folders: await this.childFolders(folder.id),
+        moveTargets,
         images: defer(() => this.folderImages(folder.id).then((images) => toImageItems(images, urls))),
       },
       { title: folder.name },
@@ -117,6 +122,13 @@ export default class DriveController extends Controller {
 
   private childFolders(parentId: number | null): Promise<FolderItemData[]> {
     return Folder.where({ parentId }).whereNull('deletedAt').orderBy('name', 'asc').get()
+      .then((rows) => rows.map((row) => new FolderItem(row).toJSON()))
+  }
+
+  /** Every active folder, flat and sorted; the picker refuses the current
+   *  target and any descendant of a folder it is moving. */
+  private allFolders(): Promise<FolderItemData[]> {
+    return Folder.whereNull('deletedAt').orderBy('name', 'asc').get()
       .then((rows) => rows.map((row) => new FolderItem(row).toJSON()))
   }
 

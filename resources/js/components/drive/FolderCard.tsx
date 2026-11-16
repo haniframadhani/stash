@@ -3,6 +3,7 @@ import { Link } from '@inertiajs/react'
 import type { FolderItem } from '../../types.js'
 import CardMenu from './CardMenu.js'
 import RenameInput, { type RenameTarget } from './RenameInput.js'
+import { clearDrag } from '../../lib/itemDrag.js'
 
 export interface FolderCardProps {
   folder: FolderItem
@@ -15,6 +16,12 @@ export interface FolderCardProps {
   onRenameDone?: () => void
   onRenameCancel?: () => void
   onHoverChange?: (hovered: boolean) => void
+  /** Drag and drop (task 2.4): dragging this card starts an in-drive move of the folder. */
+  onDragStart?: (event: React.DragEvent) => void
+  /** Drag and drop (task 2.4): dropping a selection here moves it into this folder. */
+  onDropFolder?: (folderId: number) => void
+  /** True while a selection is being dragged over this card. */
+  dragOver?: boolean
 }
 
 /** One folder pill above the images (UI_SPEC §4). Clicking or pressing Enter
@@ -30,12 +37,46 @@ export default function FolderCard({
   onRenameDone,
   onRenameCancel,
   onHoverChange,
+  onDragStart,
+  onDropFolder,
+  dragOver = false,
 }: FolderCardProps) {
   return (
     <li
-      className="group relative flex items-center rounded-g-card border border-g-line bg-g-panel transition hover:border-g-line-strong hover:bg-g-raised"
+      className={`group relative flex items-center rounded-g-card border bg-g-panel transition ${
+        dragOver
+          ? 'border-g-accent ring-2 ring-g-accent'
+          : 'border-g-line transition hover:border-g-line-strong hover:bg-g-raised'
+      }`}
+      draggable={onDragStart !== undefined}
+      onDragStart={(event) => {
+        if (!onDragStart) return
+        event.dataTransfer.effectAllowed = 'move'
+        onDragStart(event)
+      }}
+      onDragEnd={() => clearDrag()}
       onMouseEnter={onHoverChange ? () => onHoverChange(true) : undefined}
       onMouseLeave={onHoverChange ? () => onHoverChange(false) : undefined}
+      onDragOver={(event) => {
+        if (!onDropFolder) return
+        event.preventDefault()
+        event.stopPropagation()
+      }}
+      onDragEnter={(event) => {
+        if (!onDropFolder) return
+        event.preventDefault()
+        event.stopPropagation()
+      }}
+      onDragLeave={(event) => {
+        if (!onDropFolder) return
+        event.stopPropagation()
+      }}
+      onDrop={(event) => {
+        if (!onDropFolder) return
+        event.preventDefault()
+        event.stopPropagation()
+        onDropFolder(folder.id)
+      }}
     >
       {renaming ? (
         /* The rename input replaces the link, so typing cannot navigate. */

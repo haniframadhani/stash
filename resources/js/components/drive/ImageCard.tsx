@@ -2,6 +2,7 @@ import { Star } from 'lucide-react'
 import type { ImageItem } from '../../types.js'
 import CardMenu from './CardMenu.js'
 import RenameInput, { type RenameTarget } from './RenameInput.js'
+import { clearDrag } from '../../lib/itemDrag.js'
 
 /** The modifier keys a card click carries into the selection rules. */
 export interface SelectModifiers {
@@ -27,6 +28,10 @@ export interface ImageCardProps {
   onRenameDone?: () => void
   onRenameCancel?: () => void
   onHoverChange?: (hovered: boolean) => void
+  /** Drag and drop (task 2.4): dragging this card starts an in-drive move. */
+  onDragStart?: (event: React.DragEvent) => void
+  /** True while a selection is being dragged over this card. */
+  dragOver?: boolean
 }
 
 /** One grid card (UI_SPEC §4): 4/3 thumbnail with explicit dimensions, format
@@ -45,15 +50,24 @@ export default function ImageCard({
   onRenameDone,
   onRenameCancel,
   onHoverChange,
+  onDragStart,
+  dragOver = false,
 }: ImageCardProps) {
   return (
     <li
       className={`group relative cursor-pointer select-none overflow-hidden rounded-g-card border bg-g-panel transition ${
-        selected ? 'border-g-accent ring-2 ring-g-accent' : 'border-g-line'
+        dragOver ? 'border-g-accent ring-2 ring-g-accent' : selected ? 'border-g-accent ring-2 ring-g-accent' : 'border-g-line'
       }`}
+      draggable={onDragStart !== undefined}
       onClick={(event) =>
         onSelect?.({ shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey })
       }
+      onDragStart={(event) => {
+        if (!onDragStart) return
+        event.dataTransfer.effectAllowed = 'move'
+        onDragStart(event)
+      }}
+      onDragEnd={() => clearDrag()}
       onMouseEnter={onHoverChange ? () => onHoverChange(true) : undefined}
       onMouseLeave={onHoverChange ? () => onHoverChange(false) : undefined}
     >

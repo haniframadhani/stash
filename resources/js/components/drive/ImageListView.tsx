@@ -4,6 +4,7 @@ import { formatBytes, formatRelative } from '../../lib/format.js'
 import type { DriveView, SortKey } from '../../lib/driveView.js'
 import type { SelectModifiers } from './ImageCard.js'
 import RenameInput, { type RenameTarget } from './RenameInput.js'
+import { clearDrag } from '../../lib/itemDrag.js'
 
 const SORT_LABELS: Record<SortKey, string> = {
   name: 'Name',
@@ -54,6 +55,7 @@ export default function ImageListView({
   onRenameDone,
   onRenameCancel,
   onHoverChange,
+  onDragStart,
 }: {
   images: ImageItem[]
   view: DriveView
@@ -69,6 +71,8 @@ export default function ImageListView({
   onRenameDone?: () => void
   onRenameCancel?: () => void
   onHoverChange?: (id: number, hovered: boolean) => void
+  /** Drag and drop (task 2.4): dragging a row starts an in-drive move. */
+  onDragStart?: (event: React.DragEvent, imageId: number, selected: boolean) => void
 }) {
   const ariaSort = (sortKey: SortKey): 'ascending' | 'descending' | undefined => {
     if (view.sort !== sortKey) return undefined
@@ -103,6 +107,17 @@ export default function ImageListView({
               className={`cursor-pointer select-none border-b border-g-line last:border-b-0 ${
                 selectedIds?.has(image.id) ? 'bg-g-accent-tint' : 'hover:bg-g-raised'
               }`}
+              draggable={onDragStart !== undefined}
+              data-image-id={image.id}
+              onDragStart={(event) => {
+                if (!onDragStart) return
+                onDragStart(event, image.id, selectedIds?.has(image.id) ?? false)
+              }}
+              onDragEnd={() => clearDrag()}
+              onDragOver={(event) => {
+                if (!onDragStart) return
+                event.preventDefault()
+              }}
               onMouseEnter={onHoverChange ? () => onHoverChange(image.id, true) : undefined}
               onMouseLeave={onHoverChange ? () => onHoverChange(image.id, false) : undefined}
             >

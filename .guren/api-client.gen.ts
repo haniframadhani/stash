@@ -63,6 +63,11 @@ export interface ApiRoutes {
     path: '/images/:id'
     body: { name?: string }
   }
+  'items.move': {
+    method: 'POST'
+    path: '/items/move'
+    body: { imageIds?: (number | string)[]; folderIds?: (number | string)[]; targetFolderId: unknown }
+  }
   'login': {
     method: 'GET'
     path: '/login'
@@ -319,6 +324,7 @@ const routes: Record<string, { method: string; path: string }> = {
   'image.show': { method: 'GET', path: '/i/:publicId/:file' },
   'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'images.update': { method: 'PATCH', path: '/images/:id' },
+  'items.move': { method: 'POST', path: '/items/move' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },

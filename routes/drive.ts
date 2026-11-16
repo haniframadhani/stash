@@ -3,9 +3,11 @@ import HomeController from '../app/Http/Controllers/HomeController.js'
 import DriveController from '../app/Http/Controllers/DriveController.js'
 import FolderController from '../app/Http/Controllers/FolderController.js'
 import ImageController from '../app/Http/Controllers/ImageController.js'
+import ItemController from '../app/Http/Controllers/ItemController.js'
 import UploadController from '../app/Http/Controllers/UploadController.js'
 import { FolderIdParams, FolderStoreSchema, FolderUpdateSchema } from '../app/Http/Validators/FolderValidator.js'
 import { ImageIdParams, ImageUpdateSchema } from '../app/Http/Validators/ImageValidator.js'
+import { ItemMoveSchema } from '../app/Http/Validators/ItemValidator.js'
 import { UploadOptionsSchema } from '../app/Http/Validators/UploadValidator.js'
 
 // The private drive pages (ROUTES_SPEC §3). `/` funnels into the drive; a guest
@@ -45,6 +47,14 @@ export function registerDriveRoutes(router: Router): void {
     '/images/:id',
     { name: 'images.update', params: ImageIdParams, body: ImageUpdateSchema },
     [ImageController, 'update'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
+
+  // items.move (ROUTES_SPEC §4): one atomic bulk request; cycles and clashes
+  // reject the whole batch before the transaction starts.
+  router.post(
+    '/items/move',
+    { name: 'items.move', body: ItemMoveSchema },
+    [ItemController, 'move'],
   ).middleware(requireAuthenticated({ redirectTo: '/login' }))
 
   // uploads.store (ROUTES_SPEC §4): JSON only, one file per request.

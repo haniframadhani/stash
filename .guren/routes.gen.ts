@@ -14,6 +14,7 @@ export const routeManifest = {
   'image.show': { method: 'GET', path: '/i/:publicId/:file' },
   'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'images.update': { method: 'PATCH', path: '/images/:id' },
+  'items.move': { method: 'POST', path: '/items/move' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
@@ -88,6 +89,9 @@ export const routes = {
   images: {
     update: (params: RouteParams<'images.update'>, query?: RouteQuery) => route('images.update', params, query)
   },
+  items: {
+    move: (query?: RouteQuery) => route('items.move', query)
+  },
   login: Object.assign(
     (query?: RouteQuery) => route('login', query),
     {
@@ -156,6 +160,7 @@ declare module '@guren/core' {
       'folders.store': { body: { name: string; parentId?: number | null } }
       'folders.update': { params: { id: string }; body: { name?: string; parentId?: number | null } }
       'images.update': { params: { id: string }; body: { name?: string } }
+      'items.move': { body: { imageIds: number[]; folderIds: number[]; targetFolderId: number | null } }
       'login.store': { body: { email: string; password: string; remember: boolean } }
       'profile.update': { body: { name: string; email: string; password: string; currentPassword: string } }
       'uploads.store': { body: { format?: "webp" | "avif" | "original"; quality?: number; maxDimension?: number; folderId?: number; name?: string } }

@@ -23,6 +23,7 @@ import {
 import { classifyReviewFiles, type ReviewRow } from "../lib/reviewFiles.js";
 import { formatBytes } from "../lib/format.js";
 import type { SharedProps } from "../types.js";
+import Toasts from "./Toasts.js";
 import StorageBanner from "./drive/StorageBanner.js";
 import ReviewDialog, { type ReviewUpload } from "./drive/ReviewDialog.js";
 import NewFolderDialog from "./drive/NewFolderDialog.js";
@@ -33,6 +34,7 @@ import {
   setOnUploaded,
   useUploadQueue,
 } from "./drive/queueStore.js";
+import { isItemDrag, requestMoveToRoot } from "../lib/itemDrag.js";
 
 const NAV_ITEMS = [
   { href: "/files", label: "My Files", icon: Files },
@@ -55,12 +57,26 @@ function SidebarNav({
       {NAV_ITEMS.map((item) => {
         const active =
           activePath === item.href || activePath.startsWith(`${item.href}/`);
+        const isRoot = item.href === "/files";
         return (
           <Link
             key={item.href}
             href={item.href}
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
+            // Task 2.4: dropping a drag onto the sidebar's My Files moves the
+            // dragged items to the root (the drive page owns the move).
+            draggable={false}
+            onDragOver={(event) => {
+              if (!isItemDrag(event.dataTransfer)) return;
+              if (isRoot) event.preventDefault();
+            }}
+            onDrop={(event) => {
+              if (!isItemDrag(event.dataTransfer)) return;
+              event.preventDefault();
+              if (isRoot) event.stopPropagation();
+              if (isRoot) requestMoveToRoot();
+            }}
             className={`flex items-center gap-3 rounded-g-ctl px-4 py-2 text-sm transition ${
               active
                 ? "bg-g-accent-tint font-bold text-g-heading"
@@ -439,6 +455,7 @@ export default function Layout({ children }: PropsWithChildren) {
       )}
 
       <UploadQueue items={queueItems} />
+      <Toasts />
     </div>
   );
 }

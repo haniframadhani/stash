@@ -38,6 +38,7 @@ One line per area to explore: one area, one posture, one sentence.
 
 - folder CRUD and navigation — happy path plus the refusals: empty/invalid name, unknown id (404), cycle errors on move; folder rows persist on the local database between runs.
 - rename — inline rename through the ⋮ menu and F2, the sibling-clash error, and the old permanent URL still serving the image afterwards; images persist on the local database between runs.
+- move — drag an image onto a folder card, a breadcrumb crumb and the sidebar's My Files, the optimistic hide with a held request, the "Move to…" picker from the selection bar, and a folder dropped onto itself rolling back with a CYCLE toast; images and folders persist on the local database between runs.
 
 ## Gotchas
 
