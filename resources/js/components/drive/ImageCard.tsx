@@ -3,11 +3,20 @@ import type { ImageItem } from '../../types.js'
 import CardMenu from './CardMenu.js'
 import RenameInput, { type RenameTarget } from './RenameInput.js'
 
+/** The modifier keys a card click carries into the selection rules. */
+export interface SelectModifiers {
+  shiftKey: boolean
+  ctrlKey: boolean
+  metaKey: boolean
+}
+
 export interface ImageCardProps {
   image: ImageItem
-  /** Toggles the hover checkbox and the accent ring; the floating selection
-   *  bar and the keyboard selection rules arrive in task 2.3. */
+  /** Whether the card is part of the current selection (UI_SPEC §4/§7). */
   selected?: boolean
+  /** A click on the card body: plain selects, Ctrl/Cmd toggles, Shift extends. */
+  onSelect?: (modifiers: SelectModifiers) => void
+  /** The hover checkbox: an additive toggle that also sets the range anchor. */
   onToggleSelect?: () => void
   /** Inline rename (task 2.2): F2 on the hovered card or the ⋮ menu. */
   renaming?: boolean
@@ -27,6 +36,7 @@ export interface ImageCardProps {
 export default function ImageCard({
   image,
   selected = false,
+  onSelect,
   onToggleSelect,
   renaming = false,
   renameValue,
@@ -38,9 +48,12 @@ export default function ImageCard({
 }: ImageCardProps) {
   return (
     <li
-      className={`group relative overflow-hidden rounded-g-card border bg-g-panel transition ${
+      className={`group relative cursor-pointer select-none overflow-hidden rounded-g-card border bg-g-panel transition ${
         selected ? 'border-g-accent ring-2 ring-g-accent' : 'border-g-line'
       }`}
+      onClick={(event) =>
+        onSelect?.({ shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey })
+      }
       onMouseEnter={onHoverChange ? () => onHoverChange(true) : undefined}
       onMouseLeave={onHoverChange ? () => onHoverChange(false) : undefined}
     >
@@ -57,10 +70,13 @@ export default function ImageCard({
         <span className="absolute bottom-2 left-2 rounded-g-ctl bg-g-ink/75 px-1.5 py-0.5 text-[10px] font-bold uppercase text-g-on-ink">
           {image.format}
         </span>
+        {/* The checkbox and the ⋮ menu act on their own: a click there must not
+            also count as a card click, which would replace the selection. */}
         <label
           className={`absolute left-2 top-2 rounded-g-ctl bg-g-panel/90 p-1 shadow-g-card transition-opacity ${
             selected ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover:opacity-100'
           }`}
+          onClick={(event) => event.stopPropagation()}
         >
           <input
             type="checkbox"
@@ -74,6 +90,7 @@ export default function ImageCard({
           className={`absolute right-2 top-2 rounded-full bg-g-panel/90 shadow-g-card transition-opacity ${
             selected ? 'opacity-100' : 'opacity-0 focus-within:opacity-100 group-hover:opacity-100'
           }`}
+          onClick={(event) => event.stopPropagation()}
         >
           <CardMenu
             label={`More actions for ${image.name}`}

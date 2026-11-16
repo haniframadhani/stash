@@ -29,7 +29,7 @@ Goal: feel like Google Drive / OneDrive for images. Light, calm, content-first. 
 ```
 
 - Sidebar 256px on `lg+`, a drawer below `lg`. Top bar and toolbar are sticky. `⎋` is log out.
-- Selection mode swaps the toolbar for: `✕  3 selected   🔗 Copy link  ➜ Move  ★ Star  🗑 Trash`.
+- Selection mode shows a floating action bar at the bottom of the view with the count and a clear action (`✕  3 selected`); `🔗 Copy link`, `➜ Move`, `★ Star` and `🗑 Trash` join it once those actions exist. On mobile it sticks to the bottom edge.
 
 ## 2. Visual tokens
 

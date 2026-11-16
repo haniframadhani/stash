@@ -2,8 +2,10 @@
 // Run `guren codegen` to regenerate.
 
 import type { PageContract, PagePropsRecord } from '@guren/inertia-client'
+import type { SelectModifiers } from '../resources/js/components/drive/ImageCard.js'
 import type { RenameTarget } from '../resources/js/components/drive/RenameInput.js'
 import type { DriveView } from '../resources/js/lib/driveView.js'
+import type { SelectionState } from '../resources/js/lib/selection.js'
 import type { Crumb, FolderItem, ImageItem } from '../resources/js/types.js'
 import type { ValidationErrors } from '@guren/core'
 

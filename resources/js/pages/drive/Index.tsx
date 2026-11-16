@@ -5,15 +5,25 @@ import Layout from '../../components/Layout.js'
 import Breadcrumbs from '../../components/drive/Breadcrumbs.js'
 import EmptyState from '../../components/drive/EmptyState.js'
 import FolderCard from '../../components/drive/FolderCard.js'
-import ImageCard from '../../components/drive/ImageCard.js'
+import ImageCard, { type SelectModifiers } from '../../components/drive/ImageCard.js'
 import ImageListView from '../../components/drive/ImageListView.js'
 import DriveSkeleton from '../../components/drive/DriveSkeleton.js'
 import SortMenu from '../../components/drive/SortMenu.js'
 import ViewToggle from '../../components/drive/ViewToggle.js'
+import SelectionBar from '../../components/drive/SelectionBar.js'
 import type { RenameTarget } from '../../components/drive/RenameInput.js'
 import { clearRenameAttempt, takeFailedRename } from '../../components/drive/RenameInput.js'
 import type { Crumb, FolderItem, ImageItem } from '../../types.js'
 import { driveViewUrl, readDriveView, sortImages, type DriveView } from '../../lib/driveView.js'
+import {
+  EMPTY_SELECTION,
+  applySelection,
+  clearSelection,
+  selectAll,
+  selectionMode,
+  toggleSelection,
+  type SelectionState,
+} from '../../lib/selection.js'
 
 // `images` is deferred (DriveController): undefined until the follow-up
 // partial reload lands, which <Deferred> turns into the skeleton state.
@@ -24,10 +34,24 @@ interface Props {
   images?: ImageItem[]
 }
 
+/** Text entry owns Ctrl/Cmd+A, Esc and friends; checkboxes and buttons do not,
+ *  so the selection keys keep working after clicking a card's checkbox. */
+function isTextEntry(target: HTMLElement | null): boolean {
+  if (!target) return false
+  if (target.isContentEditable) return true
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true
+  if (target instanceof HTMLInputElement) {
+    return !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'file', 'color'].includes(target.type)
+  }
+  return false
+}
+
 export default function DriveIndex({ folder, breadcrumbs, folders, images }: Props) {
   const { url, props } = usePage()
   const [viewState, setViewState] = useState<DriveView>(() => readDriveView(url))
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set())
+  // Selection (task 2.3): ids plus the Shift-range anchor; the rules live in
+  // lib/selection.ts so they are unit-tested.
+  const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION)
 
   // Inline rename (task 2.2): F2 on hovered card or ⋮ menu; shared across grid/list.
   const [renaming, setRenaming] = useState<RenameTarget | null>(null)
@@ -105,21 +129,46 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images }: Pro
     })
   }, [])
 
-  // Visual selection only for now: the floating bar and the keyboard rules
-  // (click, Ctrl/Shift ranges, Esc) are task 2.3.
-  const toggleSelect = useCallback((id: number) => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
+  const sorted = useMemo(() => sortImages(images ?? [], viewState), [images, viewState])
+  // Range selection follows what the user sees, so it takes the rendered order.
+  const sortedIds = useMemo(() => sorted.map((image) => image.id), [sorted])
+
+  // The AC: navigating into or out of a folder clears the selection. Inertia
+  // keeps the page component mounted between drive.index and drive.folder, so
+  // the reset has to be explicit.
+  useEffect(() => {
+    setSelection(EMPTY_SELECTION)
+  }, [folder?.id])
+
+  const selectImage = useCallback(
+    (id: number, modifiers: SelectModifiers) => {
+      setSelection((current) => applySelection(current, sortedIds, id, selectionMode(modifiers)))
+    },
+    [sortedIds],
+  )
+
+  const toggleImage = useCallback((id: number) => {
+    setSelection((current) => toggleSelection(current, id))
   }, [])
 
-  const sorted = useMemo(() => sortImages(images ?? [], viewState), [images, viewState])
+  // Ctrl/Cmd+A selects the folder's images, Esc clears (UI_SPEC §7/§8). Text
+  // entry and open dialogs keep those keys for themselves.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (isTextEntry(event.target as HTMLElement | null)) return
+      if (event.key === 'Escape') {
+        setSelection((current) => (current.ids.size === 0 ? current : clearSelection()))
+        return
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+        event.preventDefault()
+        setSelection(selectAll(sortedIds))
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sortedIds])
 
   return (
     <Layout>
@@ -168,8 +217,9 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images }: Pro
                   <ImageCard
                     key={image.id}
                     image={image}
-                    selected={selectedIds.has(image.id)}
-                    onToggleSelect={() => toggleSelect(image.id)}
+                    selected={selection.ids.has(image.id)}
+                    onSelect={(modifiers) => selectImage(image.id, modifiers)}
+                    onToggleSelect={() => toggleImage(image.id)}
                     {...renameProps({ kind: 'image', id: image.id })}
                     onStartRename={() => startRename({ kind: 'image', id: image.id })}
                     onRenameDone={finishRename}
@@ -183,6 +233,8 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images }: Pro
                 images={sorted}
                 view={viewState}
                 onChange={updateView}
+                selectedIds={selection.ids}
+                onSelect={selectImage}
                 renaming={renaming?.kind === 'image' ? renaming : null}
                 renameValue={
                   renameFailure?.target.kind === 'image' && renameFailure.target.id === renaming?.id
@@ -202,6 +254,7 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images }: Pro
           </Deferred>
         </div>
       </div>
+      <SelectionBar count={selection.ids.size} onClear={() => setSelection(clearSelection())} />
     </Layout>
   )
 }

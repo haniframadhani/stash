@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react'
 import type { ImageItem } from '../../types.js'
 import { formatBytes, formatRelative } from '../../lib/format.js'
 import type { DriveView, SortKey } from '../../lib/driveView.js'
+import type { SelectModifiers } from './ImageCard.js'
 import RenameInput, { type RenameTarget } from './RenameInput.js'
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -45,6 +46,8 @@ export default function ImageListView({
   images,
   view,
   onChange,
+  selectedIds,
+  onSelect,
   renaming = null,
   renameValue,
   renameError,
@@ -55,6 +58,9 @@ export default function ImageListView({
   images: ImageItem[]
   view: DriveView
   onChange: (patch: Partial<DriveView>) => void
+  /** Selection (task 2.3): the same ids and rules as the grid, applied per row. */
+  selectedIds?: ReadonlySet<number>
+  onSelect?: (id: number, modifiers: SelectModifiers) => void
   /** Inline rename (task 2.2): F2 targets whichever row the pointer is on; the
    *  ⋮ menu is grid-only, the list carries no menu column. */
   renaming?: RenameTarget | null
@@ -91,7 +97,12 @@ export default function ImageListView({
           {images.map((image) => (
             <tr
               key={image.id}
-              className="border-b border-g-line last:border-b-0 hover:bg-g-raised"
+              onClick={(event) =>
+                onSelect?.(image.id, { shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey })
+              }
+              className={`cursor-pointer select-none border-b border-g-line last:border-b-0 ${
+                selectedIds?.has(image.id) ? 'bg-g-accent-tint' : 'hover:bg-g-raised'
+              }`}
               onMouseEnter={onHoverChange ? () => onHoverChange(image.id, true) : undefined}
               onMouseLeave={onHoverChange ? () => onHoverChange(image.id, false) : undefined}
             >

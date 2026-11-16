@@ -92,7 +92,7 @@ export default function RenameInput({
   }
 
   return (
-    <div className="min-w-0">
+    <div className="min-w-0" onClick={(event) => event.stopPropagation()}>
       <input
         ref={inputRef}
         value={name}
