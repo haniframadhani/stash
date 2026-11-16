@@ -28,6 +28,18 @@ export interface StashFlash {
   error?: string
 }
 
+/** One stored image version as the server sends it (ROUTES_SPEC §3; built by
+ *  app/Http/Resources/ImageItem.ts once the versions payload lands, task 3.2).
+ *  Timestamps arrive as epoch ms. */
+export interface ImageVersionSummary {
+  version: number
+  format: 'avif' | 'webp' | 'jpeg' | 'png' | 'gif'
+  size: number
+  width: number
+  height: number
+  createdAt: number
+}
+
 /** One image card as the server sends it (ROUTES_SPEC §3 ImageItem; built by
  *  app/Http/Resources/ImageItem.ts). Timestamps arrive as epoch ms. */
 export interface ImageItem {
@@ -45,6 +57,8 @@ export interface ImageItem {
   createdAt: number
   updatedAt: number
   deletedAt: number | null
+  /** Absent until the versions payload lands (task 3.2); the lightbox info panel hides the section then. */
+  versions?: ImageVersionSummary[]
   urls: { thumb: string, permanent: string, latest: string, page: string }
 }
 

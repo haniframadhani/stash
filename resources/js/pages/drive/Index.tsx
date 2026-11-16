@@ -1,6 +1,6 @@
 import { Deferred, Head, usePage } from '@inertiajs/react'
 import { ImagePlus } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { router as inertiaRouter } from '@inertiajs/react'
 import Layout from '../../components/Layout.js'
 import Breadcrumbs from '../../components/drive/Breadcrumbs.js'
@@ -13,10 +13,13 @@ import SortMenu from '../../components/drive/SortMenu.js'
 import ViewToggle from '../../components/drive/ViewToggle.js'
 import SelectionBar from '../../components/drive/SelectionBar.js'
 import MoveToPicker from '../../components/drive/MoveToPicker.js'
+import ContextMenu from '../../components/drive/ContextMenu.js'
+import { Lightbox } from '../../components/drive/Lightbox.js'
 import type { RenameTarget } from '../../components/drive/RenameInput.js'
 import { clearRenameAttempt, takeFailedRename } from '../../components/drive/RenameInput.js'
 import type { Crumb, FolderItem, ImageItem } from '../../types.js'
 import { driveViewUrl, readDriveView, sortImages, type DriveView } from '../../lib/driveView.js'
+import { imageDownloadUrl, imageMenuItems } from '../../lib/imageMenu.js'
 import {
   EMPTY_SELECTION,
   applySelection,
@@ -41,6 +44,25 @@ interface Props {
 
 /** Text entry owns Ctrl/Cmd+A, Esc and friends; checkboxes and buttons do not,
  *  so the selection keys keep working after clicking a card's checkbox. */
+/** The lightbox lives in the URL (`?image=<id>`, UI_SPEC §8) so a deep link
+ *  opens it and Back closes it, without a router dependency. */
+function lightboxIdFromUrl(url: string): number | null {
+  try {
+    const raw = new URL(url, window.location.origin).searchParams.get('image')
+    const id = raw === null ? NaN : Number(raw)
+    return Number.isInteger(id) && id > 0 ? id : null
+  } catch {
+    return null
+  }
+}
+
+function writeLightboxParam(id: number | null) {
+  const url = new URL(window.location.href)
+  if (id === null) url.searchParams.delete('image')
+  else url.searchParams.set('image', String(id))
+  window.history.replaceState(window.history.state, '', url.pathname + url.search)
+}
+
 function isTextEntry(target: HTMLElement | null): boolean {
   if (!target) return false
   if (target.isContentEditable) return true
@@ -58,6 +80,8 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
   const [renaming, setRenaming] = useState<RenameTarget | null>(null)
   const [hovered, setHovered] = useState<RenameTarget | null>(null)
   const [renameFailure, setRenameFailure] = useState<{ target: RenameTarget, attemptedName: string, message: string } | null>(null)
+  const [menu, setMenu] = useState<{ image: ImageItem, x: number, y: number } | null>(null)
+  const [lightboxId, setLightboxId] = useState<number | null>(() => lightboxIdFromUrl(url))
   const serverErrors = (props as { errors?: Record<string, string> }).errors
 
   useEffect(() => {
@@ -120,17 +144,25 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
     setViewState((previous) => {
       const next = { ...previous, ...patch }
       if (typeof window !== 'undefined') {
-        window.history.replaceState(window.history.state, '', driveViewUrl(window.location.pathname, next))
+        const url = new URL(driveViewUrl(window.location.pathname, next), window.location.origin)
+        if (lightboxId !== null) url.searchParams.set('image', String(lightboxId))
+        window.history.replaceState(window.history.state, '', url.pathname + url.search)
       }
       return next
     })
-  }, [])
+  }, [lightboxId])
 
   const sorted = useMemo(() => sortImages(images ?? [], viewState), [images, viewState])
   const sortedIds = useMemo(() => sorted.map((image) => image.id), [sorted])
 
+  const previousFolderId = useRef(folder?.id)
   useEffect(() => {
+    if (previousFolderId.current === folder?.id) return
+    previousFolderId.current = folder?.id
     setSelection(EMPTY_SELECTION)
+    setMenu(null)
+    setLightboxId(null)
+    writeLightboxParam(null)
   }, [folder?.id])
 
   const selectImage = useCallback(
@@ -147,6 +179,8 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (isTextEntry(event.target as HTMLElement | null)) return
+      // The lightbox and the context menu own Esc while they are open.
+      if (menu !== null || lightboxId !== null) return
       if (event.key === 'Escape') {
         setSelection((current) => (current.ids.size === 0 ? current : clearSelection()))
         return
@@ -159,7 +193,7 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [sortedIds])
+  }, [sortedIds, menu, lightboxId])
 
   // Task 2.4 Move orchestration.
   const [picker, setPicker] = useState<ItemDragPayload | null>(null)
@@ -197,6 +231,57 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
   const sortedImages = useMemo(() => sorted.filter((image) => !hiddenImages.has(image.id)), [sorted, hiddenImages])
   const visibleFolders = useMemo(() => folders.filter((child) => !hiddenFolders.has(child.id)), [folders, hiddenFolders])
 
+  // Task 2.5: context menu and lightbox.
+  const openImage = useCallback((id: number) => {
+    setLightboxId(id)
+    writeLightboxParam(id)
+  }, [])
+
+  const closeLightbox = useCallback(() => {
+    setLightboxId(null)
+    writeLightboxParam(null)
+  }, [])
+
+  const lightboxIndex = lightboxId === null ? -1 : sortedImages.findIndex((image) => image.id === lightboxId)
+  const lightboxImage = lightboxIndex >= 0 ? sortedImages[lightboxIndex] : null
+
+  const stepLightbox = useCallback(
+    (delta: number) => {
+      if (lightboxIndex < 0) return
+      const next = lightboxIndex + delta
+      if (next < 0 || next >= sortedImages.length) return
+      setLightboxId(sortedImages[next].id)
+      writeLightboxParam(sortedImages[next].id)
+    },
+    [lightboxIndex, sortedImages],
+  )
+
+  useEffect(() => {
+    const onPop = () => setLightboxId(lightboxIdFromUrl(window.location.search))
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // Deep link: once the deferred images land, an id outside this folder closes
+  // instead of showing an empty overlay.
+  useEffect(() => {
+    if (images === undefined || lightboxId === null) return
+    if (!sortedImages.some((image) => image.id === lightboxId)) {
+      setLightboxId(null)
+      writeLightboxParam(null)
+    }
+  }, [images, lightboxId, sortedImages])
+
+  const openImageMenu = useCallback(
+    (image: ImageItem, x: number, y: number) => {
+      setSelection((current) =>
+        current.ids.has(image.id) ? current : applySelection(current, sortedIds, image.id, 'replace'),
+      )
+      setMenu({ image, x, y })
+    },
+    [sortedIds],
+  )
+
   const handleCardDragStart = useCallback(
     (event: React.DragEvent, imageId: number, selected: boolean) => {
       event.dataTransfer.effectAllowed = 'move'
@@ -233,6 +318,23 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
     },
     [moveItems],
   )
+
+  const menuItems = menu
+    ? imageMenuItems(menu.image, {
+        onOpen: () => {
+          setMenu(null)
+          openImage(menu.image.id)
+        },
+        onRename: () => {
+          setMenu(null)
+          startRename({ kind: 'image', id: menu.image.id })
+        },
+        onMove: () => {
+          setMenu(null)
+          openPicker({ imageIds: [menu.image.id], folderIds: [] })
+        },
+      })
+    : []
 
   return (
     <Layout>
@@ -294,7 +396,6 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
                     onSelect={(modifiers) => selectImage(image.id, modifiers)}
                     onToggleSelect={() => toggleImage(image.id)}
                     {...renameProps({ kind: 'image', id: image.id })}
-                    onStartRename={() => startRename({ kind: 'image', id: image.id })}
                     onRenameDone={finishRename}
                     onRenameCancel={finishRename}
                     onHoverChange={(h) => hoverImage(image.id, h)}
@@ -302,6 +403,9 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
                       const selected = selection.ids.has(image.id)
                       handleCardDragStart(event, image.id, selected)
                     }}
+                    onOpen={() => openImage(image.id)}
+                    onContextMenu={(x, y) => openImageMenu(image, x, y)}
+                    onOpenMenu={(x, y) => openImageMenu(image, x, y)}
                   />
                 ))}
               </ul>
@@ -332,6 +436,11 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
                   const selected = selection.ids.has(imageId)
                   handleCardDragStart(event, imageId, selected)
                 }}
+                onOpen={openImage}
+                onContextMenu={(id, x, y) => {
+                  const image = sortedImages.find((candidate) => candidate.id === id)
+                  if (image) openImageMenu(image, x, y)
+                }}
               />
             ) : null}
           </Deferred>
@@ -354,6 +463,29 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
           busy={false}
           onCancel={() => setPicker(null)}
           onConfirm={(targetFolderId) => confirmPickerMove(picker, targetFolderId)}
+        />
+      )}
+      {menu && (
+        <ContextMenu
+          label={`Actions for ${menu.image.name}`}
+          items={menuItems}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+        />
+      )}
+      {lightboxImage && (
+        <Lightbox
+          image={lightboxImage}
+          versions={lightboxImage.versions}
+          canPrev={lightboxIndex > 0}
+          canNext={lightboxIndex >= 0 && lightboxIndex < sortedImages.length - 1}
+          onPrev={() => stepLightbox(-1)}
+          onNext={() => stepLightbox(1)}
+          onClose={closeLightbox}
+          onDownload={(image) => {
+            window.location.assign(imageDownloadUrl(image))
+          }}
         />
       )}
     </Layout>

@@ -1,10 +1,12 @@
 import { ArrowDown, ArrowUp } from 'lucide-react'
+import { useRef } from 'react'
 import type { ImageItem } from '../../types.js'
 import { formatBytes, formatRelative } from '../../lib/format.js'
 import type { DriveView, SortKey } from '../../lib/driveView.js'
 import type { SelectModifiers } from './ImageCard.js'
 import RenameInput, { type RenameTarget } from './RenameInput.js'
 import { clearDrag } from '../../lib/itemDrag.js'
+import { useLongPress } from '../../lib/longPress.js'
 
 const SORT_LABELS: Record<SortKey, string> = {
   name: 'Name',
@@ -56,6 +58,8 @@ export default function ImageListView({
   onRenameCancel,
   onHoverChange,
   onDragStart,
+  onOpen,
+  onContextMenu,
 }: {
   images: ImageItem[]
   view: DriveView
@@ -73,7 +77,18 @@ export default function ImageListView({
   onHoverChange?: (id: number, hovered: boolean) => void
   /** Drag and drop (task 2.4): dragging a row starts an in-drive move. */
   onDragStart?: (event: React.DragEvent, imageId: number, selected: boolean) => void
+  /** Double-click opens the lightbox (task 2.5). */
+  onOpen?: (id: number) => void
+  /** Right-click (and touch long-press) opens the shared context menu. */
+  onContextMenu?: (id: number, x: number, y: number) => void
 }) {
+  const contextMenuRef = useRef(onContextMenu)
+  contextMenuRef.current = onContextMenu
+  const longPress = useLongPress((x, y) => {
+    const id = longPressImageId.current
+    if (id !== null) contextMenuRef.current?.(id, x, y)
+  })
+  const longPressImageId = useRef<number | null>(null)
   const ariaSort = (sortKey: SortKey): 'ascending' | 'descending' | undefined => {
     if (view.sort !== sortKey) return undefined
     return view.order === 'asc' ? 'ascending' : 'descending'
@@ -104,6 +119,19 @@ export default function ImageListView({
               onClick={(event) =>
                 onSelect?.(image.id, { shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey })
               }
+              onDoubleClick={() => onOpen?.(image.id)}
+              onContextMenu={(event) => {
+                if (!onContextMenu) return
+                event.preventDefault()
+                onContextMenu(image.id, event.clientX, event.clientY)
+              }}
+              onPointerDown={(event) => {
+                longPressImageId.current = image.id
+                longPress.onPointerDown(event)
+              }}
+              onPointerMove={longPress.onPointerMove}
+              onPointerUp={longPress.onPointerUp}
+              onPointerCancel={longPress.onPointerCancel}
               className={`cursor-pointer select-none border-b border-g-line last:border-b-0 ${
                 selectedIds?.has(image.id) ? 'bg-g-accent-tint' : 'hover:bg-g-raised'
               }`}
