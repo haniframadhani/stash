@@ -38,6 +38,8 @@ export function startUpload(
   file: File,
   options: ConvertOptions,
   onProgress?: (percent: number) => void,
+  /** Destination folder (ROUTES_SPEC §4); omitted at root. */
+  folderId?: number,
 ): UploadHandle {
   const body = new FormData()
   body.append('file', file, file.name)
@@ -47,6 +49,9 @@ export function startUpload(
   }
   if (options.maxDimension !== undefined) {
     body.append('maxDimension', String(options.maxDimension))
+  }
+  if (folderId !== undefined) {
+    body.append('folderId', String(folderId))
   }
 
   const xhr = new XMLHttpRequest()

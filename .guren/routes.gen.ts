@@ -2,14 +2,19 @@
 // Run `guren codegen` to regenerate.
 
 export const routeManifest = {
+  'drive.folder': { method: 'GET', path: '/files/:folderId' },
   'drive.index': { method: 'GET', path: '/files' },
   'drive.recent': { method: 'GET', path: '/recent' },
   'drive.starred': { method: 'GET', path: '/starred' },
   'drive.trash': { method: 'GET', path: '/trash' },
+  'folders.store': { method: 'POST', path: '/folders' },
+  'folders.update': { method: 'PATCH', path: '/folders/:id' },
   'home': { method: 'GET', path: '/' },
   'image.latest': { method: 'GET', path: '/i/:publicId' },
   'image.show': { method: 'GET', path: '/i/:publicId/:file' },
   'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
+  'images.update': { method: 'PATCH', path: '/images/:id' },
+  'items.move': { method: 'POST', path: '/items/move' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
@@ -65,16 +70,27 @@ export function route<TName extends RouteName>(name: TName, ...args: RouteArgs<T
 
 export const routes = {
   drive: {
+    folder: (params: RouteParams<'drive.folder'>, query?: RouteQuery) => route('drive.folder', params, query),
     index: (query?: RouteQuery) => route('drive.index', query),
     recent: (query?: RouteQuery) => route('drive.recent', query),
     starred: (query?: RouteQuery) => route('drive.starred', query),
     trash: (query?: RouteQuery) => route('drive.trash', query)
+  },
+  folders: {
+    store: (query?: RouteQuery) => route('folders.store', query),
+    update: (params: RouteParams<'folders.update'>, query?: RouteQuery) => route('folders.update', params, query)
   },
   home: (query?: RouteQuery) => route('home', query),
   image: {
     latest: (params: RouteParams<'image.latest'>, query?: RouteQuery) => route('image.latest', params, query),
     show: (params: RouteParams<'image.show'>, query?: RouteQuery) => route('image.show', params, query),
     thumb: (params: RouteParams<'image.thumb'>, query?: RouteQuery) => route('image.thumb', params, query)
+  },
+  images: {
+    update: (params: RouteParams<'images.update'>, query?: RouteQuery) => route('images.update', params, query)
+  },
+  items: {
+    move: (query?: RouteQuery) => route('items.move', query)
   },
   login: Object.assign(
     (query?: RouteQuery) => route('login', query),
@@ -141,6 +157,10 @@ function appendQueryString(path: string, query?: RouteQuery): string {
 declare module '@guren/core' {
   interface GurenRouteContracts {
     routes: {
+      'folders.store': { body: { name: string; parentId?: number | null } }
+      'folders.update': { params: { id: string }; body: { name?: string; parentId?: number | null } }
+      'images.update': { params: { id: string }; body: { name?: string } }
+      'items.move': { body: { imageIds: number[]; folderIds: number[]; targetFolderId: number | null } }
       'login.store': { body: { email: string; password: string; remember: boolean } }
       'profile.update': { body: { name: string; email: string; password: string; currentPassword: string } }
       'uploads.store': { body: { format?: "webp" | "avif" | "original"; quality?: number; maxDimension?: number; folderId?: number; name?: string } }

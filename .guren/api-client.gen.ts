@@ -12,6 +12,10 @@
  * `path` literal, the same string the server routes on.
  */
 export interface ApiRoutes {
+  'drive.folder': {
+    method: 'GET'
+    path: '/files/:folderId'
+  }
   'drive.index': {
     method: 'GET'
     path: '/files'
@@ -28,6 +32,16 @@ export interface ApiRoutes {
     method: 'GET'
     path: '/trash'
   }
+  'folders.store': {
+    method: 'POST'
+    path: '/folders'
+    body: { name: string; parentId: unknown }
+  }
+  'folders.update': {
+    method: 'PATCH'
+    path: '/folders/:id'
+    body: { name?: string; parentId: unknown }
+  }
   'home': {
     method: 'GET'
     path: '/'
@@ -43,6 +57,16 @@ export interface ApiRoutes {
   'image.thumb': {
     method: 'GET'
     path: '/t/:publicId/:file'
+  }
+  'images.update': {
+    method: 'PATCH'
+    path: '/images/:id'
+    body: { name?: string }
+  }
+  'items.move': {
+    method: 'POST'
+    path: '/items/move'
+    body: { imageIds?: (number | string)[]; folderIds?: (number | string)[]; targetFolderId: unknown }
   }
   'login': {
     method: 'GET'
@@ -288,14 +312,19 @@ export function createApiClient<TRoutes extends { [K in keyof TRoutes]: { method
 }
 
 const routes: Record<string, { method: string; path: string }> = {
+  'drive.folder': { method: 'GET', path: '/files/:folderId' },
   'drive.index': { method: 'GET', path: '/files' },
   'drive.recent': { method: 'GET', path: '/recent' },
   'drive.starred': { method: 'GET', path: '/starred' },
   'drive.trash': { method: 'GET', path: '/trash' },
+  'folders.store': { method: 'POST', path: '/folders' },
+  'folders.update': { method: 'PATCH', path: '/folders/:id' },
   'home': { method: 'GET', path: '/' },
   'image.latest': { method: 'GET', path: '/i/:publicId' },
   'image.show': { method: 'GET', path: '/i/:publicId/:file' },
   'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
+  'images.update': { method: 'PATCH', path: '/images/:id' },
+  'items.move': { method: 'POST', path: '/items/move' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },

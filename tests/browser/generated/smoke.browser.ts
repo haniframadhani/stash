@@ -11,10 +11,10 @@ test('auth: GET /login renders auth/Login', async ({ page }) => {
 test.describe('signed in', () => {
   test.use({ storageState: AUTH_FILE })
 
-  test('drive: GET /files renders drive/Index', async ({ page }) => {
-    const response = await page.goto('/files')
+  test('drive: GET /recent renders drive/Recent', async ({ page }) => {
+    const response = await page.goto('/recent')
     expect(response?.status()).toBe(200)
-    expect(await initialComponent(page)).toBe('drive/Index')
+    expect(await initialComponent(page)).toBe('drive/Recent')
   })
 
   test('profile: GET /profile renders profile/Edit', async ({ page }) => {

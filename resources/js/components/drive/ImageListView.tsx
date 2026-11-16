@@ -1,7 +1,12 @@
 import { ArrowDown, ArrowUp } from 'lucide-react'
+import { useRef } from 'react'
 import type { ImageItem } from '../../types.js'
 import { formatBytes, formatRelative } from '../../lib/format.js'
 import type { DriveView, SortKey } from '../../lib/driveView.js'
+import type { SelectModifiers } from './ImageCard.js'
+import RenameInput, { type RenameTarget } from './RenameInput.js'
+import { clearDrag } from '../../lib/itemDrag.js'
+import { useLongPress } from '../../lib/longPress.js'
 
 const SORT_LABELS: Record<SortKey, string> = {
   name: 'Name',
@@ -44,11 +49,46 @@ export default function ImageListView({
   images,
   view,
   onChange,
+  selectedIds,
+  onSelect,
+  renaming = null,
+  renameValue,
+  renameError,
+  onRenameDone,
+  onRenameCancel,
+  onHoverChange,
+  onDragStart,
+  onOpen,
+  onContextMenu,
 }: {
   images: ImageItem[]
   view: DriveView
   onChange: (patch: Partial<DriveView>) => void
+  /** Selection (task 2.3): the same ids and rules as the grid, applied per row. */
+  selectedIds?: ReadonlySet<number>
+  onSelect?: (id: number, modifiers: SelectModifiers) => void
+  /** Inline rename (task 2.2): F2 targets whichever row the pointer is on; the
+   *  ⋮ menu is grid-only, the list carries no menu column. */
+  renaming?: RenameTarget | null
+  renameValue?: string
+  renameError?: string | null
+  onRenameDone?: () => void
+  onRenameCancel?: () => void
+  onHoverChange?: (id: number, hovered: boolean) => void
+  /** Drag and drop (task 2.4): dragging a row starts an in-drive move. */
+  onDragStart?: (event: React.DragEvent, imageId: number, selected: boolean) => void
+  /** Double-click opens the lightbox (task 2.5). */
+  onOpen?: (id: number) => void
+  /** Right-click (and touch long-press) opens the shared context menu. */
+  onContextMenu?: (id: number, x: number, y: number) => void
 }) {
+  const contextMenuRef = useRef(onContextMenu)
+  contextMenuRef.current = onContextMenu
+  const longPress = useLongPress((x, y) => {
+    const id = longPressImageId.current
+    if (id !== null) contextMenuRef.current?.(id, x, y)
+  })
+  const longPressImageId = useRef<number | null>(null)
   const ariaSort = (sortKey: SortKey): 'ascending' | 'descending' | undefined => {
     if (view.sort !== sortKey) return undefined
     return view.order === 'asc' ? 'ascending' : 'descending'
@@ -74,7 +114,41 @@ export default function ImageListView({
         </thead>
         <tbody>
           {images.map((image) => (
-            <tr key={image.id} className="border-b border-g-line last:border-b-0 hover:bg-g-raised">
+            <tr
+              key={image.id}
+              onClick={(event) =>
+                onSelect?.(image.id, { shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey })
+              }
+              onDoubleClick={() => onOpen?.(image.id)}
+              onContextMenu={(event) => {
+                if (!onContextMenu) return
+                event.preventDefault()
+                onContextMenu(image.id, event.clientX, event.clientY)
+              }}
+              onPointerDown={(event) => {
+                longPressImageId.current = image.id
+                longPress.onPointerDown(event)
+              }}
+              onPointerMove={longPress.onPointerMove}
+              onPointerUp={longPress.onPointerUp}
+              onPointerCancel={longPress.onPointerCancel}
+              className={`cursor-pointer select-none border-b border-g-line last:border-b-0 ${
+                selectedIds?.has(image.id) ? 'bg-g-accent-tint' : 'hover:bg-g-raised'
+              }`}
+              draggable={onDragStart !== undefined}
+              data-image-id={image.id}
+              onDragStart={(event) => {
+                if (!onDragStart) return
+                onDragStart(event, image.id, selectedIds?.has(image.id) ?? false)
+              }}
+              onDragEnd={() => clearDrag()}
+              onDragOver={(event) => {
+                if (!onDragStart) return
+                event.preventDefault()
+              }}
+              onMouseEnter={onHoverChange ? () => onHoverChange(image.id, true) : undefined}
+              onMouseLeave={onHoverChange ? () => onHoverChange(image.id, false) : undefined}
+            >
               <td className="px-3 py-1.5">
                 <img
                   src={image.urls.thumb}
@@ -87,7 +161,17 @@ export default function ImageListView({
                 />
               </td>
               <td className="max-w-[16rem] truncate px-3 py-2 text-g-heading" title={image.name}>
-                {image.name}
+                {renaming?.id === image.id ? (
+                  <RenameInput
+                    target={{ kind: 'image', id: image.id }}
+                    initialName={renameValue ?? image.name}
+                    error={renameError ?? null}
+                    onDone={onRenameDone ?? (() => {})}
+                    onCancel={onRenameCancel ?? (() => {})}
+                  />
+                ) : (
+                  image.name
+                )}
               </td>
               <td className="px-3 py-2 text-xs font-bold uppercase text-g-muted">{image.format}</td>
               <td className="px-3 py-2 font-mono text-xs text-g-text-2">

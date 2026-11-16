@@ -16,6 +16,8 @@ export interface QueueItem {
   /** Kept for retry. */
   file: File
   options: ConvertOptions
+  /** Destination folder; undefined at root. Kept for retry. */
+  folderId?: number
   status: QueueStatus
   /** Upload progress 0–100; server-side conversion keeps it at 100. */
   progress: number
@@ -28,6 +30,7 @@ export interface QueueUpload {
   file: File
   name: string
   options: ConvertOptions
+  folderId?: number
 }
 
 /** UI_SPEC §4: the queue sends two at a time. */
@@ -59,9 +62,14 @@ function startNext(): void {
     if (!next) return
     running.add(next.id)
     patch(next.id, { status: 'uploading', progress: 0 })
-    const handle = startUpload(next.file, next.options, (percent) => {
-      if (running.has(next.id)) patch(next.id, { progress: percent })
-    })
+    const handle = startUpload(
+      next.file,
+      next.options,
+      (percent) => {
+        if (running.has(next.id)) patch(next.id, { progress: percent })
+      },
+      next.folderId,
+    )
     active.set(next.id, handle)
     void handle.promise.then((outcome) => {
       running.delete(next.id)
@@ -83,7 +91,16 @@ function startNext(): void {
 export function enqueueUploads(uploads: readonly QueueUpload[]): void {
   const created = uploads.map((upload): QueueItem => {
     const id = nextId++
-    return { id, name: upload.name, size: upload.file.size, file: upload.file, options: upload.options, status: 'waiting', progress: 0 }
+    return {
+      id,
+      name: upload.name,
+      size: upload.file.size,
+      file: upload.file,
+      options: upload.options,
+      folderId: upload.folderId,
+      status: 'waiting',
+      progress: 0,
+    }
   })
   commit([...items, ...created])
   startNext()

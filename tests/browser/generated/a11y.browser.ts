@@ -33,9 +33,9 @@ test('a11y auth: GET /login renders auth/Login', async ({ page }, testInfo) => {
 test.describe('signed in', () => {
   test.use({ storageState: AUTH_FILE })
 
-  test('a11y drive: GET /files renders drive/Index', async ({ page }, testInfo) => {
-    await page.goto('/files')
-    expect(await initialComponent(page)).toBe('drive/Index')
+  test('a11y drive: GET /recent renders drive/Recent', async ({ page }, testInfo) => {
+    await page.goto('/recent')
+    expect(await initialComponent(page)).toBe('drive/Recent')
     await checkAccessibility(page, testInfo)
   })
 

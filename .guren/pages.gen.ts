@@ -2,8 +2,12 @@
 // Run `guren codegen` to regenerate.
 
 import type { PageContract, PagePropsRecord } from '@guren/inertia-client'
+import type { SelectModifiers } from '../resources/js/components/drive/ImageCard.js'
+import type { RenameTarget } from '../resources/js/components/drive/RenameInput.js'
 import type { DriveView } from '../resources/js/lib/driveView.js'
-import type { ImageItem } from '../resources/js/types.js'
+import type { ItemDragPayload } from '../resources/js/lib/itemDrag.js'
+import type { SelectionState } from '../resources/js/lib/selection.js'
+import type { Crumb, FolderItem, ImageItem } from '../resources/js/types.js'
 import type { ValidationErrors } from '@guren/core'
 
 
@@ -31,16 +35,6 @@ interface ImageSummary {
   name: string
   starred: boolean
 }
-
-interface Crumb {
-  id: number | null
-  name: string
-}
-
-interface FolderSummary {
-  id: number
-  name: string
-}
 /**
  * Auto-extracted Props types from page components.
  */
@@ -50,10 +44,11 @@ export interface PagePropsMap {
   errors?: ValidationErrors<'email' | 'password'>
 }
   'drive/Index': {
-  folder: null
+  folder: FolderItem | null
   breadcrumbs: Crumb[]
-  folders: FolderSummary[]
+  folders: FolderItem[]
   images?: ImageItem[]
+  moveTargets: FolderItem[]
 }
   'drive/Recent': {
   images: ImageSummary[]

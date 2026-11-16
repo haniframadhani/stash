@@ -28,6 +28,18 @@ export interface StashFlash {
   error?: string
 }
 
+/** One stored image version as the server sends it (ROUTES_SPEC §3; built by
+ *  app/Http/Resources/ImageItem.ts once the versions payload lands, task 3.2).
+ *  Timestamps arrive as epoch ms. */
+export interface ImageVersionSummary {
+  version: number
+  format: 'avif' | 'webp' | 'jpeg' | 'png' | 'gif'
+  size: number
+  width: number
+  height: number
+  createdAt: number
+}
+
 /** One image card as the server sends it (ROUTES_SPEC §3 ImageItem; built by
  *  app/Http/Resources/ImageItem.ts). Timestamps arrive as epoch ms. */
 export interface ImageItem {
@@ -45,7 +57,27 @@ export interface ImageItem {
   createdAt: number
   updatedAt: number
   deletedAt: number | null
+  /** Absent until the versions payload lands (task 3.2); the lightbox info panel hides the section then. */
+  versions?: ImageVersionSummary[]
   urls: { thumb: string, permanent: string, latest: string, page: string }
+}
+
+/** One folder card as the server sends it (ROUTES_SPEC §3 FolderItem; built by
+ *  app/Http/Resources/FolderItem.ts). Timestamps arrive as epoch ms. Folders
+ *  have no star in v1 and no server-built URLs; the client links to /files/:id. */
+export interface FolderItem {
+  id: number
+  parentId: number | null
+  name: string
+  createdAt: number
+  updatedAt: number
+  deletedAt: number | null
+}
+
+/** One breadcrumb (ROUTES_SPEC §3 Crumb); `id: null` is "My Files". */
+export interface Crumb {
+  id: number | null
+  name: string
 }
 
 export interface SharedProps {

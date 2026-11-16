@@ -1,12 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
-import sharp from 'sharp'
 import { MemoryStorageDriver, StorageManager } from '@guren/core'
+import sharp from 'sharp'
+import type { ImageSettings } from '../../config/images.js'
 import { TestApp } from '@guren/testing'
 import app from '../../src/app.js'
 import { resetDatabase } from '../../config/database.js'
 import { User } from '../../app/Models/User.js'
+import { Folder } from '../../app/Models/Folder.js'
 import { Image } from '../../app/Models/Image.js'
 import { ImageVersion } from '../../app/Models/ImageVersion.js'
+import { storeUpload } from '../../app/Services/Uploads.js'
 
 // `POST /uploads` (TASKS 1.4, docs/IMAGE_PIPELINE.md §7 to §8): the full
 // convert → objects → transaction slice. The disk is a plain memory driver so
@@ -130,15 +133,49 @@ describe('uploads.store', () => {
 
   it('deletes the objects when the DB write fails after they were stored', async () => {
     const bytes = await jpegBytes()
-    // A folderId no folder owns trips the FK constraint inside the transaction —
-    // the objects are already on the disk at that point (§7).
-    const response = await (await signedIn())
-      .post('/uploads', uploadForm(fileFrom(bytes, 'sunset.jpg', 'image/jpeg'), { folderId: '999999' }))
+    // The controller validates the destination folder, so the service level is
+    // where the FK constraint trips inside the transaction — the objects are
+    // already on the disk at that point (§7).
+    const settings = app.container.make<ImageSettings>('images')
+    await expect(
+      storeUpload({
+        bytes,
+        originalName: 'sunset.jpg',
+        folderId: 999999,
+        options: { format: 'webp' },
+        settings,
+      }),
+    ).rejects.toThrow()
 
-    expect(response.status).toBe(500)
     expect(disk.getAllPaths()).toEqual([])
     expect(await Image.all()).toHaveLength(0)
     expect(await ImageVersion.all()).toHaveLength(0)
+  })
+
+  it('answers 422 for a destination folder that does not exist or is trashed', async () => {
+    const bytes = await jpegBytes()
+    const client = await signedIn()
+
+    const unknown = await client.post('/uploads', uploadForm(fileFrom(bytes, 'one.jpg', 'image/jpeg'), { folderId: '999999' }))
+    expect(unknown.status).toBe(422)
+    expect(disk.getAllPaths()).toEqual([])
+
+    const gone = await Folder.create({ name: 'Gone' }, { set: { deletedAt: Date.now() } })
+    const trashed = await client.post('/uploads', uploadForm(fileFrom(bytes, 'two.jpg', 'image/jpeg'), { folderId: String(gone.id) }))
+    expect(trashed.status).toBe(422)
+    expect(disk.getAllPaths()).toEqual([])
+    expect(await Image.all()).toHaveLength(0)
+  })
+
+  it('uploads into the folder the request names', async () => {
+    const bytes = await jpegBytes()
+    const folder = await Folder.create({ name: 'Trips' })
+    const response = await (await signedIn())
+      .post('/uploads', uploadForm(fileFrom(bytes, 'sunset.jpg', 'image/jpeg'), { folderId: String(folder.id) }))
+      .assertCreated()
+
+    const body = await response.json<{ image: { folderId: number } }>()
+    expect(body.image.folderId).toBe(folder.id)
   })
 
   it('answers 413 for an oversized file before parsing anything', async () => {
