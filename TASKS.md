@@ -1,6 +1,6 @@
 # TASKS.md
 
-Work top to bottom, one task at a time. Tick `[x]` only when every acceptance criterion (AC) passes and `bun run typecheck && bun test && bunx guren gate` is green. Re-read the cited spec before starting a task.
+Work in the **Release plan** order below (task numbers stay stable, but file order is no longer work order), one task at a time. Tick `[x]` only when every acceptance criterion (AC) passes and `bun run typecheck && bun test && bunx guren gate` is green. Re-read the cited spec before starting a task.
 
 ## Slice rule (read first)
 
@@ -10,6 +10,32 @@ Every task is a **vertical slice**. It must end with something the owner can **s
 - Every task has a **Manual check** line: exactly what to click and what should appear. Run it in the browser (use the harness's `verify-in-browser` skill) before ticking.
 - Never tick a UI task on unit tests alone. Add one line to the decision log: `date · task · manual check result`.
 - UI built in a task follows `docs/UI_SPEC.md`. If a screen needs data that doesn't exist yet, use a small seed script or fixtures (Guren's prototype-first fixtures are fine), and say so in the task.
+
+---
+
+## Release plan (supersedes numeric order)
+
+Status 2026-11-16: M0, M1 and 2.1 to 2.5 are done. You can sign in, upload with conversion, organize, and view images. You still cannot **copy a link in the UI**, **delete an image**, or **run it outside `bun run dev`**. Release 1 closes exactly those three gaps and nothing else. Everything else ships afterwards.
+
+### Release 1: MVP (do in this order, then ship)
+
+1. **3.3 Share dialog** (trimmed, see its MVP scope): without it nobody can hand out a link.
+2. **4.2 Trash** (trimmed): public URLs are permanent and unauthenticated, so the owner needs a way to take an image down.
+3. **5.3 Route-guard test**: cheap, and proves every private route is behind `auth` and every public route is cookie-free before anything is deployed.
+4. **5.7 Docker deploy**: gets it running outside the dev server.
+5. **5.8 README** (trimmed): quick start, env reference, backups, sharing beyond LAN.
+
+**Ship gate:** on a fresh `docker compose --profile app up -d`: log in → upload → Share → copy the link → open it logged out → trash it → link 404s → restore → link works → delete forever. Record the result in the decision log.
+
+### Release 1.1: versioning and discovery
+
+5.2 rate limits (**required before exposing beyond your LAN**) → 3.1 replace → 3.2 versions panel → 3.5 cache tests → 3.4 share page → 4.1 star → 4.3/4.4 recent and search → 4.6 auto-purge → 5.1 reconcile → 5.6 automated E2E smoke.
+
+### Release 1.2: polish
+
+4.5 storage meter and view prefs → 5.4 accessibility and shortcuts → 5.5 dark mode → deferred pieces: Undo toast (4.2), multi-select copy and selection-bar 🔗 (3.3), storage-backend swap docs (5.8).
+
+Sidebar entries for Recent and Starred stay on their "coming soon" pages until R1.1; Trash becomes real in R1.
 
 ---
 
@@ -117,65 +143,68 @@ Every task is a **vertical slice**. It must end with something the owner can **s
 
 ## M3: Versioning and sharing
 
-- [ ] **3.1 Replace image (new version)**
+- [ ] **3.1 Replace image (new version)** `R1.1`
   `images.replace` per `IMAGE_PIPELINE.md` §4 and §7: write `v(n+1)`, flip `current_version` in one transaction, then prune beyond `KEEP_VERSIONS`. Context menu **Replace image…** reuses the Review dialog in single-file mode.
   AC: after a replace, the latest URL serves the new bytes with a new ETag; the previous permanent URL still serves the old bytes; the pointer flip is atomic (test with an injected failure).
   **Manual check:** replace an image → thumbnail updates → old permanent link still shows the old picture, latest link shows the new one.
 
-- [ ] **3.2 Versions panel and restore**
+- [ ] **3.2 Versions panel and restore** `R1.1`
   Lightbox info panel lists versions with copy-permanent-link, **Make current**, open. `images.restoreVersion` moves only the pointer.
   AC: restoring v1 serves v1 on the latest URL; v2's permanent URL still works; pruned versions return 404.
   **Manual check:** open info → Versions → Make current on v1 → latest link shows v1.
 
-- [ ] **3.3 Share dialog**
+- [ ] **3.3 Share dialog** `R1`
   Per `UI_SPEC.md` §5: latest, permanent, share page, Markdown/HTML snippets, AVIF warning, localhost hint, multi-select copy. Add 🔗 to the lightbox, context menu, and selection bar.
   AC: copied URLs open in a private window without login and show the expected version.
+  **MVP scope (R1):** permanent, latest, Markdown/HTML snippets, AVIF warning, localhost hint; 🔗 in the lightbox and context menu. Hide the share-page row until 3.4. Defer multi-select copy and the selection-bar 🔗 to R1.2 (hidden, not dead).
   **Manual check:** click 🔗 → Copy each link → paste in a private window.
 
-- [ ] **3.4 Share page**
+- [ ] **3.4 Share page** `R1.1`
   `GET /p/:publicId` via `this.view()` (no hydration): image, metadata, download, OG/Twitter tags.
   AC: `og:image` is the permanent URL; trashed images 404; no cookies set.
   **Manual check:** open the share page logged out → see the image, details, and a working Download button.
 
-- [ ] **3.5 Cache behavior tests (end to end)** *(backend-only)*
+- [ ] **3.5 Cache behavior tests (end to end)** `R1.1` *(backend-only)*
   Replace an image and assert: pinned = immutable, latest = revalidating, ETag differs, `304` works, thumbnails are pinned.
   AC: the whole `IMAGE_PIPELINE.md` §5 header table is asserted in tests.
 
 ## M4: Drive polish
 
-- [ ] **4.1 Star and Starred view**
+- [ ] **4.1 Star and Starred view** `R1.1`
   `items.star`, star badge on cards, ★ in the menu and selection bar, `/starred` page.
   **Manual check:** star two images → open Starred → both listed; unstar → gone.
 
-- [ ] **4.2 Trash**
+- [ ] **4.2 Trash** `R1`
   `items.trash`, `items.restore`, `items.delete`, `trash.empty`, Trash page with Restore, Delete forever, and Empty trash (confirm dialogs), "Moved to trash · Undo" toast. Trashed images' public URLs return 404 immediately.
   AC: after "Delete forever", **every version's** objects are gone and rows removed (test with the memory disk); trashing a folder hides descendants; restore with a trashed parent goes to root.
+  **MVP scope (R1):** everything here except the "Moved to trash · Undo" toast (R1.2); Restore on the Trash page covers undo. The Trash sidebar entry stops being "coming soon".
   **Manual check:** trash an image → its public link 404s → Undo or Restore from Trash → link works again → Delete forever → gone.
 
-- [ ] **4.3 Recent and 4.4 Search**
+- [ ] **4.3 Recent and 4.4 Search** `R1.1`
   `/recent` (last 100, grouped by day) and `/search?q=` (name contains, debounced search box in the top bar, `/` focuses it).
   **Manual check:** type in the search box → results page → clear → back.
 
-- [ ] **4.5 Storage meter and view prefs**
+- [ ] **4.5 Storage meter and view prefs** `R1.2`
   Sidebar meter from `image_versions.size` and counts; sort and view prefs persisted in `localStorage`.
   **Manual check:** upload an image → the meter number grows.
 
-- [ ] **4.6 Auto-purge** *(backend-only)*: Guren scheduled task deletes trash older than `TRASH_RETENTION_DAYS` using the same permanent-delete routine.
+- [ ] **4.6 Auto-purge** `R1.1` *(backend-only)*: Guren scheduled task deletes trash older than `TRASH_RETENTION_DAYS` using the same permanent-delete routine.
   AC: a test with a fake clock purges only expired items.
 
 ## M5: Hardening and operations
 
-- [ ] **5.1 Reconcile command** *(backend-only)*: `bun run console images:reconcile [--dry-run]` reports storage objects with no row and rows with missing objects; deletes orphans only with an explicit flag, never on a listing error.
-- [ ] **5.2 Rate limits** *(backend-only)*: Guren rate limiter on public routes (generous) and upload/replace (modest). A throttled upload shows a friendly toast.
-- [ ] **5.3 Route-guard test** *(backend-only)*: `tests/route-guard.test.ts` per `ROUTES_SPEC.md` §6.
-- [ ] **5.4 Accessibility and shortcuts**: focus management, ARIA grid, shortcuts table, `?` help dialog, reduced motion.
+- [ ] **5.1 Reconcile command** `R1.1` *(backend-only)*: `bun run console images:reconcile [--dry-run]` reports storage objects with no row and rows with missing objects; deletes orphans only with an explicit flag, never on a listing error.
+- [ ] **5.2 Rate limits** `R1.1` *(backend-only; do before exposing beyond your LAN)*: Guren rate limiter on public routes (generous) and upload/replace (modest). A throttled upload shows a friendly toast.
+- [ ] **5.3 Route-guard test** `R1` *(backend-only)*: `tests/route-guard.test.ts` per `ROUTES_SPEC.md` §6.
+- [ ] **5.4 Accessibility and shortcuts** `R1.2`: focus management, ARIA grid, shortcuts table, `?` help dialog, reduced motion.
   **Manual check:** press `?` → shortcuts dialog; tab through the grid with the keyboard.
-- [ ] **5.5 Dark mode**: follow system, with a manual toggle in the top bar.
-- [ ] **5.6 E2E smoke** (Playwright or the scaffold's choice): login, review and convert, upload, copy link, open it logged-out, replace, check old and new links, trash, restore, delete forever.
-- [ ] **5.7 Docker deploy**: `bunx guren deploy --target docker`; enable the `app` profile in compose; `sharp` works in the image; `data/` mounted.
+- [ ] **5.5 Dark mode** `R1.2`: follow system, with a manual toggle in the top bar.
+- [ ] **5.6 E2E smoke** `R1.1` (the R1 ship gate is run by hand; automate it here with Playwright or the scaffold's choice): login, review and convert, upload, copy link, open it logged-out, replace, check old and new links, trash, restore, delete forever.
+- [ ] **5.7 Docker deploy** `R1`: `bunx guren deploy --target docker`; enable the `app` profile in compose; `sharp` works in the image; `data/` mounted.
   AC: `docker compose --profile app up -d` serves the app and passes `/health`.
   **Manual check:** open the containerized app, log in, upload an image.
-- [ ] **5.8 README**: quick start, env reference, swapping storage backends, sharing beyond LAN (tunnel and `PUBLIC_BASE_URL`), **backups (SQLite and bucket)**.
+- [ ] **5.8 README** `R1`: quick start, env reference, swapping storage backends, sharing beyond LAN (tunnel and `PUBLIC_BASE_URL`), **backups (SQLite and bucket)**.
+  **MVP scope (R1):** quick start, env reference, sharing beyond LAN, backups. The storage-backend swap section can follow in R1.2.
 
 ---
 
@@ -261,3 +290,4 @@ _Agents: append one line per non-obvious decision: date · task · decision · r
 - 2026-11-16 · 2.5 · The context menu is one shared list (`imageMenuItems`) rendered by a single `ContextMenu` component: the card's ⋮, right-click and long-press all open the same items, so the 2.2 ⋮ menu and the 2.5 menu cannot drift; unbuilt actions stay in the list with `hidden: true` and are filtered out, never rendered dead. Right-click selects an unselected image (a selected one keeps the selection) before opening.
 - 2026-11-16 · 2.5 · Lightbox state lives in the URL as `?image=<id>` (`history.replaceState`, restored on `popstate`), because the page already keeps view/sort in the query and a deep link should open the overlay; the id is validated against the deferred images once they land, so a stale id closes instead of showing an empty overlay. Arrow keys walk the current sorted folder list and clamp at the ends (no wrap); the info panel renders its Versions section only when the 3.2 payload is present.
 - 2026-11-16 · 2.5 · Manual check (driven by `tests/browser/lightbox.browser.ts` because the session has no interactive browser tooling): fresh folder + 3 uploads → right-click selects the card and shows only Open/Download/Rename/Move to… (Share/Replace/Star/Trash absent) → Open → lightbox with `?image=<id>` → ArrowRight/ArrowLeft walk all three in sorted order and clamp at the ends → Info shows Dimensions and no Versions heading → Esc closes and drops the URL param. 2 passed; rename + drive-grid re-run green (7 passed, 1 env-gated skip).
+- 2026-11-16 · plan · Reprioritized the remaining 19 tasks into releases (R1 MVP = 3.3, 4.2, 5.3, 5.7, 5.8; R1.1 = versioning and discovery; R1.2 = polish) and trimmed 3.3, 4.2 and 5.8 to their MVP scope · the app can already upload, convert and organize, but cannot yet hand out a link, delete an image, or run outside the dev server; those three gaps are the shortest path to a usable first release. Task numbers unchanged so earlier log lines stay valid.
