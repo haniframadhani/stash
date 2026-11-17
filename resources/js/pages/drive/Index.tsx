@@ -15,6 +15,7 @@ import SelectionBar from '../../components/drive/SelectionBar.js'
 import MoveToPicker from '../../components/drive/MoveToPicker.js'
 import ContextMenu from '../../components/drive/ContextMenu.js'
 import { Lightbox } from '../../components/drive/Lightbox.js'
+import ShareDialog from '../../components/drive/ShareDialog.js'
 import type { RenameTarget } from '../../components/drive/RenameInput.js'
 import { clearRenameAttempt, takeFailedRename } from '../../components/drive/RenameInput.js'
 import type { Crumb, FolderItem, ImageItem } from '../../types.js'
@@ -81,6 +82,8 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
   const [hovered, setHovered] = useState<RenameTarget | null>(null)
   const [renameFailure, setRenameFailure] = useState<{ target: RenameTarget, attemptedName: string, message: string } | null>(null)
   const [menu, setMenu] = useState<{ image: ImageItem, x: number, y: number } | null>(null)
+  // Task 3.3: the share dialog targets one image at a time.
+  const [sharing, setSharing] = useState<ImageItem | null>(null)
   const [lightboxId, setLightboxId] = useState<number | null>(() => lightboxIdFromUrl(url))
   const serverErrors = (props as { errors?: Record<string, string> }).errors
 
@@ -333,6 +336,10 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
           setMenu(null)
           openPicker({ imageIds: [menu.image.id], folderIds: [] })
         },
+        onShare: () => {
+          setMenu(null)
+          setSharing(menu.image)
+        },
       })
     : []
 
@@ -486,8 +493,10 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
           onDownload={(image) => {
             window.location.assign(imageDownloadUrl(image))
           }}
+          onShare={() => setSharing(lightboxImage)}
         />
       )}
+      {sharing && <ShareDialog image={sharing} onClose={() => setSharing(null)} />}
     </Layout>
   )
 }

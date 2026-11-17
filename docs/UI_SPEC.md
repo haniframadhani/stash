@@ -120,6 +120,7 @@ Opens when files are dropped, pasted, or chosen. **Nothing is uploaded until Con
 - URLs come from the server (`urls.*`), built with `PUBLIC_BASE_URL`.
 - If `PUBLIC_BASE_URL` points at `localhost`, show a hint: "Only reachable on this machine. Set PUBLIC_BASE_URL to share with others."
 - Multi-select + Copy link copies one URL per line (permanent links).
+- Implemented in task 3.3 (R1 MVP): Always latest, This version, the Markdown/HTML embed, the AVIF warning and the localhost hint; 🔗 opens it from the lightbox and the context menu. The share-page row lands with 3.4; the selection-bar 🔗 and multi-select copy with R1.2.
 
 ## 6. Versions (details panel)
 

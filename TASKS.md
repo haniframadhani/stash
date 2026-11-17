@@ -22,8 +22,11 @@ Status 2026-11-16: M0, M1 and 2.1 to 2.5 are done. You can sign in, upload with 
 1. **3.3 Share dialog** (trimmed, see its MVP scope): without it nobody can hand out a link.
 2. **4.2 Trash** (trimmed): public URLs are permanent and unauthenticated, so the owner needs a way to take an image down.
 3. **5.3 Route-guard test**: cheap, and proves every private route is behind `auth` and every public route is cookie-free before anything is deployed.
-4. **5.7 Docker deploy**: gets it running outside the dev server.
-5. **5.8 README** (trimmed): quick start, env reference, backups, sharing beyond LAN.
+4. **6.3 Shared links use a public files domain** (see M6): must land before deploy, because links that die when the app is off defeat the point of sharing.
+5. **5.7 Docker deploy**: gets it running outside the dev server.
+6. **5.8 README** (trimmed): quick start, env reference, backups, sharing beyond LAN.
+
+**Note on 6.3:** it comes after 4.2 and before deploy. 4.2 is built first against the app's own routes (trashed images 404 there); 6.3 then changes how trash hides files so it still works on the public files domain. 6.1 and 6.2 are known bugs with easy workarounds, so they wait for R1.2.
 
 **Ship gate:** on a fresh `docker compose --profile app up -d`: log in → upload → Share → copy the link → open it logged out → trash it → link 404s → restore → link works → delete forever. Record the result in the decision log.
 
@@ -33,7 +36,7 @@ Status 2026-11-16: M0, M1 and 2.1 to 2.5 are done. You can sign in, upload with 
 
 ### Release 1.2: polish
 
-4.5 storage meter and view prefs → 5.4 accessibility and shortcuts → 5.5 dark mode → deferred pieces: Undo toast (4.2), multi-select copy and selection-bar 🔗 (3.3), storage-backend swap docs (5.8).
+6.1 and 6.2 bug fixes (known workarounds: use Move to… instead of dragging, and skip the lightbox Info panel) → 4.5 storage meter and view prefs → 5.4 accessibility and shortcuts → 5.5 dark mode → deferred pieces: Undo toast (4.2), multi-select copy and selection-bar 🔗 (3.3), storage-backend swap docs (5.8).
 
 Sidebar entries for Recent and Starred stay on their "coming soon" pages until R1.1; Trash becomes real in R1.
 
@@ -153,11 +156,12 @@ Sidebar entries for Recent and Starred stay on their "coming soon" pages until R
   AC: restoring v1 serves v1 on the latest URL; v2's permanent URL still works; pruned versions return 404.
   **Manual check:** open info → Versions → Make current on v1 → latest link shows v1.
 
-- [ ] **3.3 Share dialog** `R1`
+- [x] **3.3 Share dialog** `R1`
   Per `UI_SPEC.md` §5: latest, permanent, share page, Markdown/HTML snippets, AVIF warning, localhost hint, multi-select copy. Add 🔗 to the lightbox, context menu, and selection bar.
   AC: copied URLs open in a private window without login and show the expected version.
   **MVP scope (R1):** permanent, latest, Markdown/HTML snippets, AVIF warning, localhost hint; 🔗 in the lightbox and context menu. Hide the share-page row until 3.4. Defer multi-select copy and the selection-bar 🔗 to R1.2 (hidden, not dead).
   **Manual check:** click 🔗 → Copy each link → paste in a private window.
+  Done 2026-11-17: `resources/js/lib/share.ts` (`markdownSnippet`, `htmlSnippet`, `snippetFor`, `isLocalhost`, unit-tested in `tests/Share.test.ts`), `resources/js/components/drive/ShareDialog.tsx` (links from the server `ImageItem.urls`, Markdown/HTML tabs, "Link copied" toast, AVIF warning, localhost hint, Esc/backdrop close, focus restored), 🔗 wired into `Lightbox.tsx` and the shared context menu (`Index.tsx` `onShare`), lightbox stacked under the dialog via `z-60`. Manual check passed through `tests/browser/share.browser.ts` (verify-in-browser style: dialog from the lightbox and the context menu, Copy writes the server URL to the clipboard, both links fetched 200 `image/webp` in a cookie-free context). `lightbox.browser.ts` updated: Share now visible in the menu, Replace/Star/Trash still hidden. Share-page row, multi-select copy and the selection-bar 🔗 stay for 3.4/R1.2.
 
 - [ ] **3.4 Share page** `R1.1`
   `GET /p/:publicId` via `this.view()` (no hydration): image, metadata, download, OG/Twitter tags.
@@ -205,6 +209,41 @@ Sidebar entries for Recent and Starred stay on their "coming soon" pages until R
   **Manual check:** open the containerized app, log in, upload an image.
 - [ ] **5.8 README** `R1`: quick start, env reference, swapping storage backends, sharing beyond LAN (tunnel and `PUBLIC_BASE_URL`), **backups (SQLite and bucket)**.
   **MVP scope (R1):** quick start, env reference, sharing beyond LAN, backups. The storage-backend swap section can follow in R1.2.
+
+## M6: Follow-ups (owner-reported)
+
+Found by the owner while using the app. **Bugs (6.1, 6.2): reproduce first with a failing browser spec, then fix the root cause, then keep the spec as the regression test.** If you cannot reproduce a bug, do not tick it: log what you tried and ask. "Likely cause" notes are unverified hints from the decision log, not facts; check the code before trusting them.
+
+- [ ] **6.1 Dragging an image to move it must not open the upload overlay** `R1.2` *(bug, workaround exists)*
+  **Symptom:** dragging an image or folder card inside the drive (to move it, task 2.4) shows the window-wide upload drop overlay from 1.6.
+  **Expected:** the overlay and the Review & convert dialog react only to files dragged in from outside the browser. Internal card drags never show them.
+  **Likely cause:** the overlay's window listeners fire on any `dragenter`. Internal drags carry the `application/x-stash-items` type (`resources/js/lib/itemDrag.ts`), but a thumbnail `<img>` can also carry a native image drag that looks like `Files`. Decide "external file drag" by ignoring anything that has the internal type, not by `Files` alone. Put that check in a small pure function and unit-test it.
+  AC: dragging an image card or folder card never shows the overlay or opens the dialog; dragging OS files onto the window still does (the 1.6 spec keeps passing); dropping an internal card on empty page background does nothing; moving by drag still works (the 2.4 spec keeps passing). A browser spec asserts the overlay stays hidden during an internal drag (extend `tests/browser/move.browser.ts`).
+  **Manual check:** drag an image card across the page and onto a folder card → no overlay at any point → it moves. Then drag a file from your desktop onto the window → the overlay appears.
+
+- [ ] **6.2 Page freezes after opening the info panel in the lightbox** `R1.2` *(bug, workaround: don't open Info; a refresh recovers)*
+  **Symptom:** open an image in the lightbox, click Info, and the whole page stops responding (nothing clickable, keys do nothing). A refresh fixes it. Before Info is opened the lightbox works, including next and previous.
+  **Expected:** Info opens and closes like any panel; the lightbox and the page stay responsive.
+  **Find out which kind of freeze it is first**, because the fixes differ: (a) JS is stuck, e.g. an infinite render or effect loop (CPU pegged, even `page.evaluate` hangs); or (b) JS is fine but an element swallows input, e.g. an overlay or a focus trap left behind (`page.evaluate` works, clicks do nothing, `document.elementFromPoint` returns the blocker). Record which one it is in the decision log.
+  **Likely cause (unverified):** the info panel added in 2.5 together with the `?image=<id>` URL state (`replaceState` and `popstate`) and the Versions section that renders only when its payload exists. Look for an effect that sets state and re-triggers itself, or a handler that is registered on every render.
+  AC: a failing spec in `tests/browser/lightbox.browser.ts` reproduces it first, then passes after the fix. With Info open: arrows move between images, Info closes again, Esc closes the lightbox, and a click on the drive afterwards works. Check on the first and last image, in grid and list view, and after navigating while Info is open. No console errors and no main-thread block over 1 second while Info is open.
+  **Manual check:** double-click an image → Info → press → → press ← → close Info → Esc → click another image in the grid. Everything keeps responding without a refresh.
+
+- [ ] **6.3 Shared links use a public files domain** `R1` *(read the whole task before coding; it changes how the finished 4.2 hides files)*
+  **Why:** the app runs on the owner's machine and is not up 24/7, but shared links must keep working while it is off. Today every link points at this app (`PUBLIC_BASE_URL`, routes `/i/:publicId/...` served by `PublicImageController`), so links die whenever the app is off. In production the bucket is **Cloudflare R2** (confirmed by the owner), with a custom public domain added in Cloudflare that serves the bucket directly.
+  **Goal:** links the owner copies or pastes (Share dialog, Markdown/HTML snippets) use `PUBLIC_FILES_BASE_URL` + the object key, for example `https://img.example.com/images/{publicId}/v1.webp`. Objects are served by Cloudflare, not by this app.
+  **Scope:**
+  - New optional env var `PUBLIC_FILES_BASE_URL`, validated in `config/env.ts`. Do not reuse the old name `PUBLIC_FILE_BASE_URL` (renamed in 0.2) and keep it separate from `PUBLIC_BASE_URL`, which stays the app's own origin. **Unset = today's behavior**, so dev, tests and the local disk are unaffected.
+  - `UrlBuilder` is the only place that builds URLs. When the var is set, permanent (`vN`) and thumbnail links come from the files domain; keys still come only from `ImageStore`.
+  - The app's own UI (grid, lightbox) may keep loading through the app origin; only links meant to leave the app change.
+  - Pinned objects must be cacheable by Cloudflare: write them with `Content-Type` and `Cache-Control: public, max-age=31536000, immutable`. Use put metadata if the Guren S3 driver supports it, otherwise a Cloudflare cache rule, and log which you chose.
+  - R2 config: `STORAGE_DISK=s3` with the R2 `endpoint` (`https://<account-id>.r2.cloudflarestorage.com`) and region `auto`. Run the 0.5 contract test against a **scratch bucket**, never the production bucket.
+  - The app's `/i/...` routes stay as the fallback; do not delete them or their tests.
+  **Decisions to settle and log (use these defaults unless the owner says otherwise):**
+  1. **"Always latest" and the share page need this app**, so they cannot work while it is off. Default: with `PUBLIC_FILES_BASE_URL` set, the Share dialog shows only links that work without the app (permanent and thumbnail) and hides "Always latest" (revisit with 3.1 Replace). The 3.4 share page stays on the app origin and is labelled as needing the app online.
+  2. **Takedown on a bucket served directly.** The 4.2 rule "trashed public URLs 404 immediately" cannot hold if the object stays at the same public key. Default: trashing moves every version's objects under a `trash/` key prefix and restoring moves them back, and the owner adds a Cloudflare rule that blocks `/trash/*` on the files domain; document that rule in 5.8. Delete forever still removes every version. 4.2 is already built against the app's routes by the time you get here, so this task **must update trash, restore, Delete forever and their tests** to the chosen approach, and 4.2's "trashed public URLs 404 immediately" AC must still hold on the files domain. If the move cannot be made reliable (partial failure leaves an image half-hidden), stop and ask the owner.
+  AC: with the var set, every copied link and snippet starts with `PUBLIC_FILES_BASE_URL` and the correct key; with it unset, output is identical to today (existing 1.3 and 3.3 tests unchanged); unit tests cover the URL forms in both modes; pinned objects carry the cache headers above; the contract test passes against a scratch R2 bucket.
+  **Manual check:** this needs real R2 and the domain. If the session has no R2 credentials or domain, finish everything else, prove URL building with tests, and log the manual check as **owner step, not run**; do not tick the task. Owner step: set the var → upload → Share → copy the permanent link → stop the app → open the link in a private window and it still loads.
 
 ---
 
@@ -290,4 +329,6 @@ _Agents: append one line per non-obvious decision: date · task · decision · r
 - 2026-11-16 · 2.5 · The context menu is one shared list (`imageMenuItems`) rendered by a single `ContextMenu` component: the card's ⋮, right-click and long-press all open the same items, so the 2.2 ⋮ menu and the 2.5 menu cannot drift; unbuilt actions stay in the list with `hidden: true` and are filtered out, never rendered dead. Right-click selects an unselected image (a selected one keeps the selection) before opening.
 - 2026-11-16 · 2.5 · Lightbox state lives in the URL as `?image=<id>` (`history.replaceState`, restored on `popstate`), because the page already keeps view/sort in the query and a deep link should open the overlay; the id is validated against the deferred images once they land, so a stale id closes instead of showing an empty overlay. Arrow keys walk the current sorted folder list and clamp at the ends (no wrap); the info panel renders its Versions section only when the 3.2 payload is present.
 - 2026-11-16 · 2.5 · Manual check (driven by `tests/browser/lightbox.browser.ts` because the session has no interactive browser tooling): fresh folder + 3 uploads → right-click selects the card and shows only Open/Download/Rename/Move to… (Share/Replace/Star/Trash absent) → Open → lightbox with `?image=<id>` → ArrowRight/ArrowLeft walk all three in sorted order and clamp at the ends → Info shows Dimensions and no Versions heading → Esc closes and drops the URL param. 2 passed; rename + drive-grid re-run green (7 passed, 1 env-gated skip).
-- 2026-11-16 · plan · Reprioritized the remaining 19 tasks into releases (R1 MVP = 3.3, 4.2, 5.3, 5.7, 5.8; R1.1 = versioning and discovery; R1.2 = polish) and trimmed 3.3, 4.2 and 5.8 to their MVP scope · the app can already upload, convert and organize, but cannot yet hand out a link, delete an image, or run outside the dev server; those three gaps are the shortest path to a usable first release. Task numbers unchanged so earlier log lines stay valid.
+- 2026-11-16 · plan · Reprioritized the remaining 19 tasks into releases (R1 MVP = 3.3, 4.2, 5.3, 5.7, 5.8; R1.1 = versioning and discovery; R1.2 = polish) and trimmed 3.3, 4.2 and 5.8 to their MVP scope · the app can already upload, convert and organize, but cannot yet hand out a link, delete an image, or run outside the dev server; those three gaps are the shortest path to a usable first release. Task numbers unchanged so earlier log lines stay valid.- 2026-11-17 · 3.3 · The share snippets are client-side string work (`resources/js/lib/share.ts`) over the server's `ImageItem.urls`, not new server fields · URL construction stays in `UrlBuilder` (one place shapes URLs) and the client already receives the exact permanent/latest/page links, so an `embed` prop would duplicate them across the wire.
+- 2026-11-17 · 3.3 · The Share dialog is one image at a time (`sharing` state), opened from the shared context menu's Share item and the lightbox's new 🔗; the selection-bar 🔗 and multi-select copy stay hidden until R1.2 per the task's MVP scope. The dialog uses `z-60` so it sits above the lightbox (`z-50`) when opened from there.
+- 2026-11-17 · 3.3 · Manual check (driven by `tests/browser/share.browser.ts` because the session has no interactive browser tooling; `browser:doctor` inconclusive — auth-required landmarks, same as 1.2–2.5): upload → double-click → lightbox 🔗 → "Share …" dialog with the "Anyone with the link" line → Copy on Always latest and This version wrote each server URL to the clipboard (read back through the Clipboard API) → Markdown snippet `![name](…v1.webp)`, HTML tab `<img src=…>` → both links fetched 200 `image/webp` in a cookie-free context → right-click → Share opened the same dialog → Esc closed it. pass, 0 runtime errors, 0 window events; `lightbox.browser.ts` updated to expect Share present. `bun run typecheck`, `bun test` (190 pass), `bunx guren gate` all green; full browser suite 40 passed, 1 env-gated skip.

@@ -63,8 +63,8 @@ test.describe('context menu and lightbox', () => {
     await expect(menu.getByRole('menuitem', { name: 'Download' })).toBeVisible()
     await expect(menu.getByRole('menuitem', { name: 'Rename' })).toBeVisible()
     await expect(menu.getByRole('menuitem', { name: 'Move to…' })).toBeVisible()
-    // Not built yet: hidden, not dead.
-    await expect(menu.getByRole('menuitem', { name: 'Share' })).toHaveCount(0)
+    // Share shipped with task 3.3; Replace/Star/Trash are still hidden, not dead.
+    await expect(menu.getByRole('menuitem', { name: 'Share' })).toBeVisible()
     await expect(menu.getByRole('menuitem', { name: 'Replace image…' })).toHaveCount(0)
     await expect(menu.getByRole('menuitem', { name: 'Star' })).toHaveCount(0)
     await expect(menu.getByRole('menuitem', { name: 'Move to trash' })).toHaveCount(0)
