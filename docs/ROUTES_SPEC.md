@@ -122,3 +122,7 @@ Trash (task 4.2): `items.trash` sets `deleted_at` on the named items and flashes
 ## 6. Route-guard sweep
 
 `tests/route-guard.test.ts` iterates every registered route that is not `GET`/`HEAD` and asserts an unauthenticated request is not 2xx. It also asserts the public allowlist in §1 is exactly the set of routes reachable without login.
+
+The sweep sends its mutations as a **CSRF-primed guest**, not a bare request: a bare request is refused by the CSRF middleware on every route, so the assertion would hold even with no `auth` guard at all. With the token, the request reaches the route's own middleware and controller, and a 2xx means no guard stands between a stranger and the action.
+
+The allowlist is written with the names this app's route graph carries, which are not always the table's: `login.show` registers as `login`, and `/health` carries no name.

@@ -94,7 +94,6 @@ describe('trash service (task 4.2)', () => {
 
   it('restore with a trashed parent goes to the root and suffixes a clash', async () => {
     const seeded = memoryStore()
-    const store = seeded.store
     const parent = await Folder.create({ name: 'Parent' })
     const child = await Folder.create({ name: 'Images', parentId: parent.id })
     const trashed = await seedImage('Photo', child.id, seeded)

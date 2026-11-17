@@ -88,8 +88,6 @@ export async function trashItems(input: TrashInput): Promise<TrashResult> {
   const { images, folders } = await resolveActive(input)
   const deletedAt = new Date().toISOString()
   // Both loops run in one transaction: the Trash either gains the whole batch
-  // or none of it.
-  // Both loops run in one transaction: the Trash either gains the whole batch
   // or none of it. `forceUpdate` is the query builder's trusted-server-data
   // path (the ORM types `deleted_at` out of the create payload), and the
   // builder joins the open transaction on its own.
@@ -132,7 +130,6 @@ export async function restoreItems(input: TrashInput): Promise<TrashResult> {
       restored++
     }
   })
-  return { trashed: 0, restored }
   return { trashed: 0, restored }
 }
 
@@ -218,7 +215,8 @@ export async function deleteForever(input: TrashInput, store: ImageStore = Image
   return { trashed: 0, restored: 0, deleted: doomedImages.size + doomedFolders.length }
 }
 
-/** How far a folder sits below the root; only used to delete children first. */
+/** How far a folder sits below the root: the delete order needs children first
+ *  so no parent is removed while a live child still references it. */
 function depthOf(folder: FolderRecord, all: FolderRecord[]): number {
   const byId = new Map(all.map((row) => [row.id, row]))
   let depth = 0
