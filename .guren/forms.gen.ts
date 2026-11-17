@@ -32,6 +32,16 @@ export const imagesUpdateForm: RouteFormContract<'images.update', 'PATCH', '/ima
   },
 }
 
+export const itemsDeleteForm: RouteFormContract<'items.delete', 'POST', '/items/delete', ApiRoutes['items.delete']['body']> = {
+  route: 'items.delete',
+  method: 'POST',
+  path: '/items/delete',
+  fields: {
+    imageIds: { type: 'array', required: false },
+    folderIds: { type: 'array', required: false },
+  },
+}
+
 export const itemsMoveForm: RouteFormContract<'items.move', 'POST', '/items/move', ApiRoutes['items.move']['body']> = {
   route: 'items.move',
   method: 'POST',
@@ -40,6 +50,26 @@ export const itemsMoveForm: RouteFormContract<'items.move', 'POST', '/items/move
     imageIds: { type: 'array', required: false },
     folderIds: { type: 'array', required: false },
     targetFolderId: { type: 'object', required: true },
+  },
+}
+
+export const itemsRestoreForm: RouteFormContract<'items.restore', 'POST', '/items/restore', ApiRoutes['items.restore']['body']> = {
+  route: 'items.restore',
+  method: 'POST',
+  path: '/items/restore',
+  fields: {
+    imageIds: { type: 'array', required: false },
+    folderIds: { type: 'array', required: false },
+  },
+}
+
+export const itemsTrashForm: RouteFormContract<'items.trash', 'POST', '/items/trash', ApiRoutes['items.trash']['body']> = {
+  route: 'items.trash',
+  method: 'POST',
+  path: '/items/trash',
+  fields: {
+    imageIds: { type: 'array', required: false },
+    folderIds: { type: 'array', required: false },
   },
 }
 

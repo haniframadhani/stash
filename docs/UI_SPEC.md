@@ -136,6 +136,7 @@ List newest first: `v3 (current) · AVIF · 610 KB · 2 days ago`, with actions:
 - Drag from the OS shows the drop overlay. Dropping onto a FolderCard preselects that folder in the Review dialog.
 - Optimistic UI for star, rename, move, trash (local state, rollback on error). Everything else uses Inertia navigation and partial reloads (`only`).
 - Context menu: Open · Share · Download · Rename · Replace image… · Move to… · Star · Move to trash. In Trash: Restore · Delete forever.
+- Trash page (task 4.2): each row has **Restore** and **Delete forever** (both behind a confirm for the permanent one); the header carries **Empty trash** with a confirm. Deleting forever or emptying shows a success flash; the page reloads through the redirect.
 
 ## 8. Keyboard shortcuts
 

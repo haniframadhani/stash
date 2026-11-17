@@ -14,12 +14,16 @@ export const routeManifest = {
   'image.show': { method: 'GET', path: '/i/:publicId/:file' },
   'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'images.update': { method: 'PATCH', path: '/images/:id' },
+  'items.delete': { method: 'POST', path: '/items/delete' },
   'items.move': { method: 'POST', path: '/items/move' },
+  'items.restore': { method: 'POST', path: '/items/restore' },
+  'items.trash': { method: 'POST', path: '/items/trash' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
   'profile.edit': { method: 'GET', path: '/profile' },
   'profile.update': { method: 'PUT', path: '/profile' },
+  'trash.empty': { method: 'DELETE', path: '/trash' },
   'uploads.store': { method: 'POST', path: '/uploads' },
 } as const
 
@@ -90,7 +94,10 @@ export const routes = {
     update: (params: RouteParams<'images.update'>, query?: RouteQuery) => route('images.update', params, query)
   },
   items: {
-    move: (query?: RouteQuery) => route('items.move', query)
+    delete: (query?: RouteQuery) => route('items.delete', query),
+    move: (query?: RouteQuery) => route('items.move', query),
+    restore: (query?: RouteQuery) => route('items.restore', query),
+    trash: (query?: RouteQuery) => route('items.trash', query)
   },
   login: Object.assign(
     (query?: RouteQuery) => route('login', query),
@@ -102,6 +109,9 @@ export const routes = {
   profile: {
     edit: (query?: RouteQuery) => route('profile.edit', query),
     update: (query?: RouteQuery) => route('profile.update', query)
+  },
+  trash: {
+    empty: (query?: RouteQuery) => route('trash.empty', query)
   },
   uploads: {
     store: (query?: RouteQuery) => route('uploads.store', query)
@@ -160,7 +170,10 @@ declare module '@guren/core' {
       'folders.store': { body: { name: string; parentId?: number | null } }
       'folders.update': { params: { id: string }; body: { name?: string; parentId?: number | null } }
       'images.update': { params: { id: string }; body: { name?: string } }
+      'items.delete': { body: { imageIds: number[]; folderIds: number[] } }
       'items.move': { body: { imageIds: number[]; folderIds: number[]; targetFolderId: number | null } }
+      'items.restore': { body: { imageIds: number[]; folderIds: number[] } }
+      'items.trash': { body: { imageIds: number[]; folderIds: number[] } }
       'login.store': { body: { email: string; password: string; remember: boolean } }
       'profile.update': { body: { name: string; email: string; password: string; currentPassword: string } }
       'uploads.store': { body: { format?: "webp" | "avif" | "original"; quality?: number; maxDimension?: number; folderId?: number; name?: string } }

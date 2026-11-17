@@ -105,6 +105,8 @@ Rules: name 1 to 255 chars, trimmed, no `/` or `\`. Create and move auto-suffix 
 
 Permanent deletes: objects first, then rows. On storage failure keep rows and return an error flash.
 
+Trash (task 4.2): `items.trash` sets `deleted_at` on the named items and flashes the count; a trashed folder hides its descendants, and public `/i`, `/t` URLs for an image under a trashed folder answer 404 too. `items.restore` clears `deleted_at`, moves the item to the root when its parent is missing or trashed, and suffixes a name clash ` (1)`. `items.delete` and `trash.empty` share one permanent-delete path: a trashed folder takes its whole subtree (images and subfolders, trashed or not), every version's objects go before any row, images are deleted before folders so the foreign keys never block, and a storage failure keeps the rows for a retry.
+
 `items.move` (task 2.4): one transaction moves every image and folder; items already in `targetFolderId` are no-ops and are not counted. A folder into itself or a descendant → `targetFolderId` `CYCLE`; an unknown/trashed item → `items`; a name clash with an active sibling in the destination (case-insensitive) → `targetFolderId`. No clash is auto-suffixed — a move is a relocation, not a create. The redirect lands on the source folder of the first moved item, so the browser never depends on `Referer`.
 
 ---

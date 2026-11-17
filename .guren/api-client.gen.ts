@@ -63,10 +63,25 @@ export interface ApiRoutes {
     path: '/images/:id'
     body: { name?: string }
   }
+  'items.delete': {
+    method: 'POST'
+    path: '/items/delete'
+    body: { imageIds?: (number | string)[]; folderIds?: (number | string)[] }
+  }
   'items.move': {
     method: 'POST'
     path: '/items/move'
     body: { imageIds?: (number | string)[]; folderIds?: (number | string)[]; targetFolderId: unknown }
+  }
+  'items.restore': {
+    method: 'POST'
+    path: '/items/restore'
+    body: { imageIds?: (number | string)[]; folderIds?: (number | string)[] }
+  }
+  'items.trash': {
+    method: 'POST'
+    path: '/items/trash'
+    body: { imageIds?: (number | string)[]; folderIds?: (number | string)[] }
   }
   'login': {
     method: 'GET'
@@ -89,6 +104,10 @@ export interface ApiRoutes {
     method: 'PUT'
     path: '/profile'
     body: { name: string; email: string; password?: string; currentPassword?: string }
+  }
+  'trash.empty': {
+    method: 'DELETE'
+    path: '/trash'
   }
   'uploads.store': {
     method: 'POST'
@@ -324,11 +343,15 @@ const routes: Record<string, { method: string; path: string }> = {
   'image.show': { method: 'GET', path: '/i/:publicId/:file' },
   'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'images.update': { method: 'PATCH', path: '/images/:id' },
+  'items.delete': { method: 'POST', path: '/items/delete' },
   'items.move': { method: 'POST', path: '/items/move' },
+  'items.restore': { method: 'POST', path: '/items/restore' },
+  'items.trash': { method: 'POST', path: '/items/trash' },
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
   'profile.edit': { method: 'GET', path: '/profile' },
   'profile.update': { method: 'PUT', path: '/profile' },
+  'trash.empty': { method: 'DELETE', path: '/trash' },
   'uploads.store': { method: 'POST', path: '/uploads' },
 }

@@ -7,7 +7,7 @@ import ItemController from '../app/Http/Controllers/ItemController.js'
 import UploadController from '../app/Http/Controllers/UploadController.js'
 import { FolderIdParams, FolderStoreSchema, FolderUpdateSchema } from '../app/Http/Validators/FolderValidator.js'
 import { ImageIdParams, ImageUpdateSchema } from '../app/Http/Validators/ImageValidator.js'
-import { ItemMoveSchema } from '../app/Http/Validators/ItemValidator.js'
+import { ItemBatchSchema, ItemMoveSchema } from '../app/Http/Validators/ItemValidator.js'
 import { UploadOptionsSchema } from '../app/Http/Validators/UploadValidator.js'
 
 // The private drive pages (ROUTES_SPEC §3). `/` funnels into the drive; a guest
@@ -49,12 +49,33 @@ export function registerDriveRoutes(router: Router): void {
     [ImageController, 'update'],
   ).middleware(requireAuthenticated({ redirectTo: '/login' }))
 
-  // items.move (ROUTES_SPEC §4): one atomic bulk request; cycles and clashes
-  // reject the whole batch before the transaction starts.
+  // items.move / trash / restore / delete (ROUTES_SPEC §4): one bulk request
+  // per action; cycles and clashes reject the whole batch before any write.
   router.post(
     '/items/move',
     { name: 'items.move', body: ItemMoveSchema },
     [ItemController, 'move'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
+  router.post(
+    '/items/trash',
+    { name: 'items.trash', body: ItemBatchSchema },
+    [ItemController, 'trash'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
+  router.post(
+    '/items/restore',
+    { name: 'items.restore', body: ItemBatchSchema },
+    [ItemController, 'restore'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
+  router.post(
+    '/items/delete',
+    { name: 'items.delete', body: ItemBatchSchema },
+    [ItemController, 'delete'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
+  // DELETE /trash (trash.empty) has no body: it wipes everything in the Trash.
+  router.delete(
+    '/trash',
+    { name: 'trash.empty' },
+    [ItemController, 'empty'],
   ).middleware(requireAuthenticated({ redirectTo: '/login' }))
 
   // uploads.store (ROUTES_SPEC §4): JSON only, one file per request.

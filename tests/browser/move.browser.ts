@@ -215,7 +215,7 @@ test.describe('move', () => {
     await imageCard(page, names[1]!).click({ modifiers: ['ControlOrMeta'] })
     await expect(selectionBar(page)).toContainText('2 selected')
 
-    await selectionBar(page).getByRole('button', { name: 'Move selected items' }).click()
+    await selectionBar(page).getByRole('button', { name: 'Move selected items', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Move items' })
     await expect(dialog).toBeVisible()
     // The current folder is a no-op, so it is not a selectable destination.

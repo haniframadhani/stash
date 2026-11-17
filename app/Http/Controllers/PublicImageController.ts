@@ -9,6 +9,7 @@ import { Controller } from '@guren/core'
 import { Image } from '../../Models/Image.js'
 import { ImageVersion } from '../../Models/ImageVersion.js'
 import { ImageStore } from '../../Services/ImageStore.js'
+import { trashedFolderIds } from '../../Services/Trash.js'
 import { versionedFileName } from '../../Services/UrlBuilder.js'
 
 const PUBLIC_ID_PATTERN = /^[A-Za-z0-9]{12}$/
@@ -48,6 +49,9 @@ export default class PublicImageController extends Controller {
 
     const image = await Image.where({ publicId }).whereNull('deletedAt').first()
     if (!image) return notFound()
+    // A trashed folder hides its contents (PLANNING.md §6): the image row is
+    // active, but its ancestor is in the Trash, so the link is gone too.
+    if (image.folderId !== null && (await trashedFolderIds()).has(image.folderId)) return notFound()
 
     const wanted = input.parsed.kind === 'pinned' ? input.parsed.version : image.currentVersion
     const version = await ImageVersion.first({ imageId: image.id, version: wanted })
