@@ -1,9 +1,10 @@
 # Storage for Stash development. The app runs on the host (`bun run dev`) and
 # reaches the bucket through S3_ENDPOINT in .env (default http://localhost:8333).
+name: s3-only
+
 services:
   weed-mini:
     image: chrislusf/seaweedfs:4.53
-    container_name: weed-mini
     command: mini -dir=/data
     ports:
       - '8333:8333' # S3 endpoint
