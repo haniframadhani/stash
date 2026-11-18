@@ -23,7 +23,16 @@ export type ImageItemData = {
   createdAt: number
   updatedAt: number
   deletedAt: number | null
-  urls: { thumb: string, permanent: string, latest: string, page: string }
+  urls: {
+    /** What the grid and list load: the files-domain thumbnail, or the private
+     *  preview route when no files domain is configured (local disk dev). */
+    thumb: string
+    /** What the lightbox loads: the files-domain object or the preview route. */
+    view: string
+    /** The copyable pinned link; null when no files domain is configured, so
+     *  there is nothing that would work while the app is off. */
+    permanent: string | null
+  }
 }
 
 export class ImageItem extends Resource<
@@ -61,9 +70,8 @@ export class ImageItem extends Resource<
       deletedAt: image.deletedAt,
       urls: {
         thumb: this.urls.thumb(image.publicId, image.slug, image.currentVersion),
+        view: this.urls.view(image.publicId, image.slug, image.currentVersion, version.ext),
         permanent: this.urls.permanent(ref),
-        latest: this.urls.latest(image.publicId, image.slug, version.ext),
-        page: this.urls.page(image.publicId),
       },
     }
   }

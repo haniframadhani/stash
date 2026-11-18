@@ -1,10 +1,8 @@
 import { Router, ambientContainer, type HealthManager, type CheckResult } from '@guren/core'
 import { registerDriveRoutes } from './drive.js'
 import { registerAuthRoutes } from './auth.js'
-import { registerPublicRoutes } from './public.js'
 
 export function registerWebRoutes(router: Router): void {
-  registerPublicRoutes(router)
   registerAuthRoutes(router)
   registerDriveRoutes(router)
 

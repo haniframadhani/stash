@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Download, Info, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Info, Share2, X } from "lucide-react";
 import type { ImageItem, ImageVersionSummary } from "../../types";
 import { formatBytes } from "../../lib/format";
 
@@ -13,6 +13,8 @@ type Props = {
   onNext: () => void;
   onClose: () => void;
   onDownload: (image: ImageItem) => void;
+  /** Task 3.3: opens the Share dialog for the current image. */
+  onShare?: () => void;
 };
 
 function formatDate(epochMs: number) {
@@ -71,6 +73,16 @@ export function Lightbox(props: Props) {
           {image.name}
         </div>
         <div className="pointer-events-auto flex items-center gap-1">
+          {props.onShare && (
+            <button
+              type="button"
+              onClick={props.onShare}
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+              aria-label="Share"
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => props.onDownload(image)}
@@ -102,7 +114,7 @@ export function Lightbox(props: Props) {
       <div className="relative z-10 flex flex-1 items-center justify-center overflow-hidden p-4 pt-16 pb-16">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={image.urls.latest}
+          src={image.urls.view}
           alt={image.name}
           className="max-h-full max-w-full object-contain"
           draggable={false}

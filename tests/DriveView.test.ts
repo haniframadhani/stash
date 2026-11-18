@@ -23,7 +23,7 @@ function image(overrides: Partial<ImageItem> = {}): ImageItem {
     createdAt: 1_000,
     updatedAt: 1_000,
     deletedAt: null,
-    urls: { thumb: '/t', permanent: '/i', latest: '/i', page: '/p' },
+    urls: { thumb: '/preview/thumb', view: '/preview/view', permanent: null },
     ...overrides,
   }
 }

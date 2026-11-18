@@ -25,7 +25,7 @@ if (!Number.isInteger(count) || count < 1 || count > 500) {
 await app.boot()
 
 const env = app.container.make<AppEnv>('env')
-const urls = new UrlBuilder(env.PUBLIC_BASE_URL ?? env.APP_URL)
+const urls = UrlBuilder.fromEnv(env)
 const store = ImageStore.fromContainer()
 // Suffix so reruns never trip the case-insensitive sibling-name unique index.
 const stamp = Date.now().toString(36)

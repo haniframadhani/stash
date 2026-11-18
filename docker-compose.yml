@@ -1,64 +1,53 @@
-# Storage for Stash development. The app runs on the host (`bun run dev`) and
-# reaches the bucket through S3_ENDPOINT in .env (default http://localhost:8333).
+# Stash — production. Storage is your own S3-compatible bucket (Cloudflare R2
+# in the owner's setup), configured in .env; nothing S3-related runs here.
+#
+#   docker compose up -d --build      # http://<host>:3333
+#
+# Development lives in docker-compose.dev.yml, which bundles SeaweedFS.
+# Secrets stay in .env (git-ignored), never in this file.
 services:
-  weed-mini:
-    image: chrislusf/seaweedfs:4.53
-    container_name: weed-mini
-    command: mini -dir=/data
-    ports:
-      - '8333:8333' # S3 endpoint
-      - '8888:8888' # Filer UI
-      - '9333:9333' # Master UI
-      - '12535:12535' # Admin UI
-    volumes:
-      - weed-data:/data
-    healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:9333/cluster/status']
-      interval: 3s
-      timeout: 3s
-      retries: 20
-
-  # One-shot: creates the bucket the app expects, then exits. Idempotent, so
-  # `docker compose up -d` can run again without failing.
-  bucket-init:
-    image: chrislusf/seaweedfs:4.53
-    depends_on:
-      weed-mini:
-        condition: service_healthy
-    entrypoint: ['/bin/sh', '-c']
+  # Schema and the owner account, once per `up`; `app` waits for it to exit 0.
+  app-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: [.env]
     environment:
-      S3_BUCKET: my-bucket
-    command:
-      - |
-        until echo "s3.bucket.list" | weed shell -master=weed-mini:9333 2>/dev/null | grep -q "$$S3_BUCKET"; do
-          echo "s3.bucket.create -name $$S3_BUCKET" | weed shell -master=weed-mini:9333 || true
-          sleep 1
-        done
-        echo "bucket $$S3_BUCKET ready"
+      NODE_ENV: production
+      PORT: 3333
+      DATABASE_URL: ./data/stash.db
+    volumes:
+      - stash-data:/app/data
+    command: ['sh', '-c', 'bunx guren db:migrate && bunx guren db:seed --force']
 
-  # MinIO is a drop-in alternative; uncomment both services, stop weed-mini,
-  # and point S3_ENDPOINT at http://localhost:9000 (.env credentials below).
-  # minio:
-  #   image: minio/minio
-  #   command: server /data --console-address ':9001'
-  #   ports:
-  #     - '9000:9000'
-  #     - '9001:9001'
-  #   environment:
-  #     MINIO_ROOT_USER: admin
-  #     MINIO_ROOT_PASSWORD: secret123
-  #   volumes:
-  #     - minio-data:/data
-  # minio-init:
-  #   image: minio/mc
-  #   depends_on:
-  #     - minio
-  #   entrypoint: ['/bin/sh', '-c']
-  #   command:
-  #     - |
-  #       until mc alias set local http://minio:9000 admin secret123; do sleep 1; done
-  #       mc mb --ignore-existing local/my-bucket
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      PORT: 3333
+      DATABASE_URL: ./data/stash.db
+    depends_on:
+      app-migrate:
+        condition: service_completed_successfully
+    ports:
+      # Host port only. Change it with APP_PORT (e.g. APP_PORT=3335) when the
+      # dev server already holds 3333; the container always listens on 3333.
+      - '${APP_PORT:-3333}:3333'
+    volumes:
+      - stash-data:/app/data
+      # Only used when STORAGE_DISK=local; harmless with s3.
+      - stash-storage:/app/storage/app
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'bun', '-e', "fetch('http://127.0.0.1:3333/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
-  weed-data:
-  # minio-data:
+  stash-data:
+  stash-storage:

@@ -30,8 +30,9 @@ const env = defineEnv({
   S3_SECRET_ACCESS_KEY: Env.string().secret().optional(),
   S3_BUCKET: Env.string().optional(),
   S3_REGION: Env.string().optional(),
-  PUBLIC_BASE_URL: Env.url().optional()
-    .describe('Absolute base for copied share links; APP_URL when unset.'),
+  PUBLIC_FILES_BASE_URL: Env.url().optional()
+    .describe('Public origin that serves the bucket directly (e.g. an R2 custom domain). '
+      + 'Every shareable link uses it; unset means nothing can be shared.'),
 
   // Single seeded owner (PLANNING.md §9). Read by the seeder only.
   ADMIN_EMAIL: Env.custom(z.email()).optional()

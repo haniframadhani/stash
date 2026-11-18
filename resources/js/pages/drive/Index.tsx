@@ -15,6 +15,7 @@ import SelectionBar from '../../components/drive/SelectionBar.js'
 import MoveToPicker from '../../components/drive/MoveToPicker.js'
 import ContextMenu from '../../components/drive/ContextMenu.js'
 import { Lightbox } from '../../components/drive/Lightbox.js'
+import ShareDialog from '../../components/drive/ShareDialog.js'
 import type { RenameTarget } from '../../components/drive/RenameInput.js'
 import { clearRenameAttempt, takeFailedRename } from '../../components/drive/RenameInput.js'
 import type { Crumb, FolderItem, ImageItem } from '../../types.js'
@@ -81,6 +82,8 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
   const [hovered, setHovered] = useState<RenameTarget | null>(null)
   const [renameFailure, setRenameFailure] = useState<{ target: RenameTarget, attemptedName: string, message: string } | null>(null)
   const [menu, setMenu] = useState<{ image: ImageItem, x: number, y: number } | null>(null)
+  // Task 3.3: the share dialog targets one image at a time.
+  const [sharing, setSharing] = useState<ImageItem | null>(null)
   const [lightboxId, setLightboxId] = useState<number | null>(() => lightboxIdFromUrl(url))
   const serverErrors = (props as { errors?: Record<string, string> }).errors
 
@@ -226,6 +229,17 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
     return () => window.removeEventListener(MOVE_TO_ROOT_EVENT, handler)
   }, [moveItems])
 
+  /** Task 4.2: optimistic trash — the cards leave at once and the request
+   *  reloads the page through its redirect; a 422 rolls nothing back because
+   *  trash only removes rows from the current view. */
+  const trashItems = useCallback((batch: { imageIds: number[], folderIds: number[] }) => {
+    setSelection(EMPTY_SELECTION)
+    inertiaRouter.post('/items/trash', batch, {
+      preserveScroll: true,
+      onError: () => showToast('error', 'Could not move the selection to trash.'),
+    })
+  }, [])
+
   const hiddenImages = useMemo(() => new Set(optimisticMove?.imageIds ?? []), [optimisticMove])
   const hiddenFolders = useMemo(() => new Set(optimisticMove?.folderIds ?? []), [optimisticMove])
   const sortedImages = useMemo(() => sorted.filter((image) => !hiddenImages.has(image.id)), [sorted, hiddenImages])
@@ -333,6 +347,15 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
           setMenu(null)
           openPicker({ imageIds: [menu.image.id], folderIds: [] })
         },
+        onShare: () => {
+          setMenu(null)
+          setSharing(menu.image)
+        },
+        onTrash: () => {
+          const target = menu.image
+          setMenu(null)
+          trashItems({ imageIds: [target.id], folderIds: [] })
+        },
       })
     : []
 
@@ -374,6 +397,7 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
                     onHoverChange={(h) => hoverFolder(child.id, h)}
                     onDragStart={(event) => handleFolderDragStart(event, child.id)}
                     onDropFolder={(targetId) => handleDropInto(targetId)}
+                    onTrash={() => trashItems({ imageIds: [], folderIds: [child.id] })}
                   />
                 ))}
               </ul>
@@ -453,6 +477,10 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
           if (selection.ids.size === 0) return
           openPicker({ imageIds: [...selection.ids], folderIds: [] })
         }}
+        onTrash={() => {
+          if (selection.ids.size === 0) return
+          trashItems({ imageIds: [...selection.ids], folderIds: [] })
+        }}
       />
       {picker && (
         <MoveToPicker
@@ -486,8 +514,10 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
           onDownload={(image) => {
             window.location.assign(imageDownloadUrl(image))
           }}
+          onShare={() => setSharing(lightboxImage)}
         />
       )}
+      {sharing && <ShareDialog image={sharing} onClose={() => setSharing(null)} />}
     </Layout>
   )
 }

@@ -41,11 +41,11 @@ export interface ImageMenuItem {
   onSelect?: () => void
 }
 
-/** The public latest URL with `?download=1`, so the browser saves the current
- *  version instead of navigating to it. */
+/** The current version's URL, with `?download=1` on the private preview route
+ *  so the browser saves it instead of navigating. Bucket links open as-is. */
 export function imageDownloadUrl(image: ImageItem): string {
-  const url = new URL(image.urls.latest, window.location.origin)
-  url.searchParams.set('download', '1')
+  const url = new URL(image.urls.view, window.location.origin)
+  if (url.pathname.startsWith('/preview/')) url.searchParams.set('download', '1')
   return url.toString()
 }
 

@@ -26,3 +26,19 @@ export const ItemMoveSchema = z
       ctx.addIssue({ code: 'custom', path: ['items'], message: 'Move at most 500 items at a time.' })
     }
   })
+
+/** Body contract of `items.trash`, `items.restore` and `items.delete`
+ *  (ROUTES_SPEC §4): the same `{ imageIds, folderIds }` batch with no target.
+ *  The state rules (must be trashed, must be active) live in
+ *  app/Services/Trash.ts. */
+export const ItemBatchSchema = z
+  .object({ imageIds: itemIds, folderIds: itemIds })
+  .superRefine((body, ctx) => {
+    const total = body.imageIds.length + body.folderIds.length
+    if (total === 0) {
+      ctx.addIssue({ code: 'custom', path: ['items'], message: 'Select at least one item.' })
+    }
+    if (total > 500) {
+      ctx.addIssue({ code: 'custom', path: ['items'], message: 'Handle at most 500 items at a time.' })
+    }
+  })

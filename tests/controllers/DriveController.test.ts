@@ -96,9 +96,11 @@ describe('drive routes', () => {
     for (const image of images) {
       expect(image.version).toBe(1)
       expect(image.starred).toBe(false)
-      const urls = image.urls as Record<string, string>
-      expect(urls.thumb).toContain(`/t/${String(image.publicId)}/`)
-      expect(urls.latest).toContain(`/i/${String(image.publicId)}`)
+      const urls = image.urls as Record<string, string | null>
+      expect(urls.thumb).toContain(`/preview/${String(image.publicId)}/`)
+      expect(urls.view).toContain(`/preview/${String(image.publicId)}/`)
+      // No public files domain in the suite (tests/setup.ts clears it).
+      expect(urls.permanent).toBeNull()
     }
   })
 
@@ -111,14 +113,14 @@ describe('drive routes', () => {
       auth?: { user?: { id: number } | null }
       capabilities?: { webp?: boolean, avif?: boolean, maxUploadMb?: number }
       storage?: { usedBytes?: number, imageCount?: number }
-      publicBaseUrl?: string
+      filesBaseUrl?: string | null
       flash?: Record<string, unknown>
     }
     expect(props.auth?.user?.id).toBe(owner.id)
     expect(typeof props.capabilities?.webp).toBe('boolean')
     expect(props.capabilities?.maxUploadMb).toBeGreaterThan(0)
     expect(props.storage).toEqual({ usedBytes: 0, imageCount: 0 })
-    expect(typeof props.publicBaseUrl).toBe('string')
+    expect(props.filesBaseUrl).toBeNull()
     expect(props.flash).toEqual({})
   })
 

@@ -1,8 +1,12 @@
 /** The one place Stash URLs are formatted (docs/IMAGE_PIPELINE.md §6).
- *  Absolute URLs use PUBLIC_BASE_URL (APP_URL when unset); without a base they
- *  come out root-relative, which the frontend can prefix itself.
+ *  The bucket's public domain (`PUBLIC_FILES_BASE_URL`) is the only delivery
+ *  path for images: `permanent`, `view` and `thumb` point at the object key so
+ *  they work while this local app is off. Without a files domain there is
+ *  nothing to share, and the app falls back to its authenticated `/preview`
+ *  route for its own browser only.
  */
 import type { AppEnv } from '@guren/core'
+import { imageKey, thumbKey } from './ImageStore.js'
 
 export interface ImageRef {
   publicId: string
@@ -25,50 +29,63 @@ export function versionedFileName(slug: string, version: number, ext: string): s
   return `${slug}.v${version}.${ext}`
 }
 
+/** The preview route's thumb name; distinct from the image by `.thumb.webp`. */
+export function previewThumbName(slug: string, version: number): string {
+  return `${slug}.v${version}.thumb.webp`
+}
+
 export class UrlBuilder {
-  constructor(private readonly baseUrl: string | undefined) {}
+  constructor(private readonly filesBaseUrl?: string) {}
 
-  /** PUBLIC_BASE_URL wins; APP_URL covers a plain local deployment. */
+  /** The bucket's public domain, the only origin a shared link may use. */
   static fromEnv(env: AppEnv): UrlBuilder {
-    return new UrlBuilder(env.PUBLIC_BASE_URL ?? env.APP_URL)
+    return new UrlBuilder(env.PUBLIC_FILES_BASE_URL)
   }
 
-  /** Exactly version n; content never changes (pinned, immutable). */
-  permanent(ref: ImageRef): string {
-    return this.path(`i/${ref.publicId}/${versionedFileName(ref.slug, ref.version, ref.ext)}`)
+  /** The public files domain, when one is configured. */
+  get filesBase(): string | undefined {
+    return this.filesBaseUrl
   }
 
-  /** The current version; revalidates. With no slug or ext, the short `/i/{id}` form. */
-  latest(publicId: string, slug?: string, ext?: string): string {
-    if (slug === undefined || ext === undefined) return this.path(`i/${publicId}`)
-    return this.path(`i/${publicId}/${slug}.${ext}`)
+  /** Exactly version n on the bucket (pinned, immutable), or null when no
+   *  files domain is configured — there is no shareable link in that case. */
+  permanent(ref: ImageRef): string | null {
+    if (!this.filesBaseUrl) return null
+    return this.filePath(imageKey(ref.publicId, ref.version, ref.ext))
   }
 
-  /** Thumbnail of version n, always WebP (pinned, immutable). */
+  /** What the lightbox loads: the bucket object when configured, otherwise the
+   *  authenticated preview route (dev with the local disk). */
+  view(publicId: string, slug: string, version: number, ext: string): string {
+    if (this.filesBaseUrl) return this.filePath(imageKey(publicId, version, ext))
+    return `/preview/${publicId}/${versionedFileName(slug, version, ext)}`
+  }
+
+  /** What the grid and list load: the bucket thumbnail when configured,
+   *  otherwise the authenticated preview route. */
   thumb(publicId: string, slug: string, version: number): string {
-    return this.path(`t/${publicId}/${versionedFileName(slug, version, 'webp')}`)
+    if (this.filesBaseUrl) return this.filePath(thumbKey(publicId, version))
+    return `/preview/${publicId}/${previewThumbName(slug, version)}`
   }
 
-  /** The public share page (HTML, OG tags). */
-  page(publicId: string): string {
-    return this.path(`p/${publicId}`)
-  }
-
-  /** `![alt](permanent url)` for chat apps and Markdown editors. */
-  markdown(ref: SnippetOptions): string {
-    return `![${ref.alt ?? ref.slug}](${this.permanent(ref)})`
+  /** `![alt](permanent url)` for chat apps and Markdown editors; null without
+   *  a files domain, because nothing can be embedded. */
+  markdown(ref: SnippetOptions): string | null {
+    const url = this.permanent(ref)
+    if (!url) return null
+    return `![${ref.alt ?? ref.slug}](${url})`
   }
 
   /** `<img src width height alt>`; width/height keep layout from jumping. */
-  html(ref: SizedSnippetOptions): string {
+  html(ref: SizedSnippetOptions): string | null {
     const src = this.permanent(ref)
+    if (!src) return null
     const alt = escapeHtml(ref.alt ?? ref.slug)
     return `<img src="${src}" width="${ref.width}" height="${ref.height}" alt="${alt}">`
   }
 
-  private path(p: string): string {
-    const base = this.baseUrl?.replace(/\/+$/, '') ?? ''
-    return `${base}/${p}`
+  private filePath(key: string): string {
+    return `${this.filesBaseUrl?.replace(/\/+$/, '') ?? ''}/${key}`
   }
 }
 

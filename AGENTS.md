@@ -225,48 +225,42 @@ Guren is new and its APIs are not in your training data. Before writing code aga
 ## Stash setup commands
 
 ```bash
-docker compose up -d          # storage + bucket init (SeaweedFS by default)
+# Production bundles no S3: point STORAGE_DISK/S3_* at your own bucket, or use local.
 bun install
 cp .env.example .env          # scaffold already creates .env with APP_KEY; merge, don't overwrite
 bun run db:migrate && bun run db:seed
-RUN_S3_TESTS=1 bun test tests/storage-contract.test.ts   # against the live S3 endpoint
+RUN_S3_TESTS=1 bun test tests/storage-contract.test.ts   # against the configured S3 endpoint
+docker compose -f docker-compose.dev.yml up -d --build   # dev stack: bundled SeaweedFS + app on :3334
 ```
 
 All other commands (`dev`, `codegen`, `typecheck`, `test`, `guren check|audit|gate`) are listed under Development Commands. Run `bunx guren gate` before declaring done.
 
-## Local S3 storage: check before starting (local development only)
+## S3 storage: production vs development
 
-Applies to local development only, whenever the work touches SeaweedFS or any other S3-compatible service (MinIO, etc.) that `docker compose` provides. It does not apply to production or CI.
+**Production (`docker-compose.yml`) bundles no S3 service.** Storage is the bucket configured in `.env` (Cloudflare R2 for this owner), or `STORAGE_DISK=local` on a volume. Never add SeaweedFS/MinIO to that file.
 
-**Before doing anything that needs the storage backend** (running the app against S3, `RUN_S3_TESTS=1`, seeding, debugging uploads), check whether the compose stack is already up:
+**Development (`docker-compose.dev.yml`) bundles its own SeaweedFS** (`weed-mini` + one-shot `bucket-init`, bucket `my-bucket`, endpoint `http://localhost:8333` from the host / `http://weed-mini:8333` inside the network) with every volume bind-mounted under `./volumes/`. Start it only through that file.
 
-```bash
-docker compose ps                       # is the storage service listed and "running"/"healthy"?
-docker ps --filter "name=seaweed"       # catches a container started outside this compose project
-```
-
-- **If it is running, reuse it.** Do not run `docker compose up` again, and never `docker run` a new SeaweedFS (or MinIO, etc.) container by hand.
-- **If it is not running**, start it only through the project's compose file: `docker compose up -d`. This is the one allowed way to start storage.
-- **If a port is already in use** (e.g. S3 on 8333), assume a storage container already exists. Find it with `docker ps` and reuse it. Do not start a second one on another port.
-- Do not `docker compose down`, `down -v`, restart, or recreate the storage service unless the user asks. `-v` deletes the bucket data.
-- Do not change the compose file or the S3 endpoint/credentials in `.env` just to get a fresh container. Point at the existing one.
-- If the check shows the stack is unhealthy, report it to the user instead of replacing it.
+- Never `docker run` a storage container: use `docker compose -f docker-compose.dev.yml up -d`, and reuse a stack that is already up.
+- Before work that needs storage (`RUN_S3_TESTS=1`, seeding, debugging uploads), check first: `docker compose -f docker-compose.dev.yml ps`, or the endpoint in `.env`.
+- Use the endpoint and credentials already in `.env` / the dev file. Do not change them, and do not start a second endpoint on another port.
+- If the endpoint is unhealthy, report it to the user instead of replacing it. `down -v` deletes app volumes (`data/`, `storage/app`) — ask first. On the dev file the data is a bind mount under `./data` and `./volumes`, so deleting those directories deletes dev data; never do that unasked.
 
 ## Authorization rules (critical)
 
 - **Every** `POST`, `PUT`, `PATCH`, `DELETE`, and every private page is registered inside the `auth` middleware group (`requireAuthenticated`).
-- The **only** public routes are: `GET /i/*`, `GET /t/*`, `GET /p/:publicId`, `GET /health`, and the login routes. Adding a public route requires updating `PLANNING.md` §9 and `docs/ROUTES_SPEC.md`.
+- The **only** public routes are: `GET /health` and the login routes. The app is local and never internet-facing; it serves no public image route (`/i`, `/t`, `/p` are gone). Adding a public route requires updating `PLANNING.md` §9 and `docs/ROUTES_SPEC.md`.
 - Keep the **route-guard test** (`tests/route-guard.test.ts`) green: it enumerates all registered non-GET routes and asserts that an unauthenticated request does not succeed (401/302/403, never 2xx). Add new routes to that sweep automatically; do not hand-maintain a list unless the graph is unavailable.
 - Use `this.auth.userOrFail()` in mutating actions as defense in depth.
 - Use `this.validateBody()` / `validateParams()` / `validateQuery()` with zod on every input. `guren audit` must stay clean.
 
-## Public image routes (critical)
+## Public image delivery (critical)
 
-- Responses carry **no `Set-Cookie`**. Verify (the session and CSRF middleware may attach cookies to GETs), and mount or configure the routes so they don't. A test asserts it.
-- Exact headers and URL rules are in `docs/IMAGE_PIPELINE.md` §5 to §6. Always send `X-Content-Type-Options: nosniff`.
-- Do the DB lookup and the `If-None-Match` check **before** reading storage, so `304` never touches S3.
-- Trashed or missing images and versions return `404`.
-- Never derive a storage key from user input. Keys come only from DB rows (`storage_key`).
+- Images are served by the **bucket's public files domain** (`PUBLIC_FILES_BASE_URL`), never by this app. A copied link is `{files base}/images/{publicId}/v{n}.{ext}`; it must open with the app (and the machine) off.
+- App code only builds URLs in `UrlBuilder`; keys only in `ImageStore`. Never derive a storage key from user input, and never hand out an app route as a shareable link.
+- `/preview/:publicId/:file` is the private fallback for the local UI (local disk dev or no files domain). It stays behind `requireAuthenticated`, sends `Cache-Control: private, …`, and returns `404` for trashed or missing images and versions.
+- Trashing must hide bytes at the bucket too: move every version's objects under `trash/` (the files domain blocks that prefix) and restore must move them back. Never leave an image half-hidden.
+- Headers, keys and the Cloudflare rules are in `docs/IMAGE_PIPELINE.md` §4 to §6. Always send `X-Content-Type-Options: nosniff`.
 
 ## Versioning rules (critical)
 
@@ -305,8 +299,8 @@ docker ps --filter "name=seaweed"       # catches a container started outside th
 ## Security checklist
 
 - Sanitize file names (strip path separators and control characters). Slugs are `[a-z0-9-]` only.
-- Do not serve user content as HTML or SVG. Pinned and latest routes only serve the stored `avif`, `webp`, `jpeg`, `png`, `gif` MIME types.
-- Public routes: rate-limit with Guren's rate limiter (task 5.2). Login is already throttled.
+- Do not serve user content as HTML or SVG. The private preview route only serves the stored `avif`, `webp`, `jpeg`, `png`, `gif` MIME types; the public files domain serves the bucket objects, written with those MIME types only.
+- Public surface: the bucket's `images/*` prefix (unguessable keys, no listing) and the login throttle on the app. Do not expose the app itself.
 - Never log credentials, `APP_KEY`, or storage secrets. Never commit `.env`.
 - `ADMIN_PASSWORD` is used only by the seeder; store only the hash.
 
@@ -316,7 +310,7 @@ docker ps --filter "name=seaweed"       # catches a container started outside th
 
 - Use the **memory** storage driver in unit tests; the contract test also runs against the real endpoint when `RUN_S3_TESTS=1`.
 - Generate fixture images in tests with `sharp` (no binary fixtures committed).
-- Must-have tests: converter (formats, resize, metadata stripped, animated GIF), versioning (replace, prune, pinned stays valid), public routes (headers, 304, 404, no cookie), route guard, folder cycle rejection, trash/restore/purge (objects deleted), storage contract.
+- Must-have tests: converter (formats, resize, metadata stripped, animated GIF), versioning (replace, prune, pinned stays valid), private preview (auth, headers, 404s), URL building in both modes (files domain and preview fallback), route guard, folder cycle rejection, trash/restore/purge (objects deleted), storage contract.
 - Add or update tests in the same change as the feature.
 
 ## Git

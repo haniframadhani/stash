@@ -21,8 +21,8 @@ import HealthProvider from '../app/Providers/HealthProvider.js'
 
 const app = createApp({
   // Session and CSRF are mounted by SessionCsrfProvider instead, which skips
-  // the public delivery prefixes (/i, /t, /p) so image responses carry no
-  // Set-Cookie. autoCsrf must follow autoSession for the same reason.
+  // the bare `/health` probe. autoCsrf must follow autoSession for the same
+  // reason.
   auth: { autoSession: false, autoCsrf: false },
 // HealthServiceProvider binds the container's `health` manager, which
 // HealthProvider then registers the database and storage checks into.

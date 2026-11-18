@@ -22,6 +22,8 @@ export interface FolderCardProps {
   onDropFolder?: (folderId: number) => void
   /** True while a selection is being dragged over this card. */
   dragOver?: boolean
+  /** Task 4.2: the folder and its contents leave the drive for the Trash. */
+  onTrash?: () => void
 }
 
 /** One folder pill above the images (UI_SPEC §4). Clicking or pressing Enter
@@ -40,6 +42,7 @@ export default function FolderCard({
   onDragStart,
   onDropFolder,
   dragOver = false,
+  onTrash,
 }: FolderCardProps) {
   return (
     <li
@@ -103,7 +106,10 @@ export default function FolderCard({
       <div className="mr-2">
         <CardMenu
           label={`More actions for folder ${folder.name}`}
-          items={[{ label: 'Rename', onSelect: () => onStartRename?.() }]}
+          items={[
+            { label: 'Rename', onSelect: () => onStartRename?.() },
+            ...(onTrash ? [{ label: 'Move to trash', onSelect: onTrash }] : []),
+          ]}
         />
       </div>
     </li>

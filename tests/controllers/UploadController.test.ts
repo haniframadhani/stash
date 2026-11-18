@@ -70,7 +70,7 @@ describe('uploads.store', () => {
     const body = await response.json<{
       image: {
         publicId: string, name: string, version: number, format: string, slug: string,
-        size: number, urls: { thumb: string, latest: string },
+        size: number, urls: { thumb: string, view: string, permanent: string | null },
       }
       originalSize: number
       storedSize: number
@@ -85,8 +85,9 @@ describe('uploads.store', () => {
     expect(body.storedSize).toBe(body.image.size)
     expect(body.savedBytes).toBe(bytes.length - body.storedSize)
     expect(body.savedPercent).toBeGreaterThan(0)
-    expect(body.image.urls.thumb).toContain(`/t/${body.image.publicId}/`)
-    expect(body.image.urls.thumb.endsWith('.v1.webp')).toBe(true)
+    expect(body.image.urls.thumb).toContain(`/preview/${body.image.publicId}/`)
+    expect(body.image.urls.thumb.endsWith('.v1.thumb.webp')).toBe(true)
+    expect(body.image.urls.permanent).toBeNull()
 
     const images = await Image.all()
     const versions = await ImageVersion.all()

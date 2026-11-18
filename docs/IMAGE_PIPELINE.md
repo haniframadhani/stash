@@ -3,7 +3,7 @@ type: feature
 ---
 # IMAGE_PIPELINE.md
 
-Conversion, naming, versioning, and public delivery. This is the contract for `ImageConverter`, `ImageStore`, `UrlBuilder`, and the public image controllers.
+Conversion, naming, versioning, and public delivery. This is the contract for `ImageConverter`, `ImageStore`, `UrlBuilder`, and the private preview controller; shared images are served by the bucket's files domain, never by the app.
 
 ## 1. Inputs
 
@@ -59,72 +59,111 @@ Rules:
 ```
 images/{publicId}/v{version}.{ext}          original-or-converted image
 images/{publicId}/v{version}.thumb.webp     thumbnail
+trash/images/{publicId}/v{version}.{ext}    the same objects while trashed
 ```
-An optional `STORAGE_PREFIX` (Guren S3 `prefix`) may sit in front. App code never builds keys by hand; `ImageStore` does.
+An optional `STORAGE_PREFIX` (Guren S3 `prefix`) may sit in front. App code never builds keys by hand; `ImageStore` does. Trashing moves both objects of every affected version under `trash/`; restoring moves them back; permanent delete removes both locations.
 
 **URL forms**
 
-| Kind | Path | Meaning |
-|---|---|---|
-| Permanent | `/i/{publicId}/{slug}.v{n}.{ext}` | Exactly version `n`. Content never changes. |
-| Latest | `/i/{publicId}/{slug}.{ext}` | Current version. Revalidates. |
-| Latest (short) | `/i/{publicId}` | Same as Latest, any extension. |
-| Thumbnail | `/t/{publicId}/{slug}.v{n}.webp` | Thumbnail of version `n`. |
-| Share page | `/p/{publicId}` | HTML page, OG tags. |
+The bucket's files domain is the only public delivery path; the app is local
+and never proxies image bytes to a shareable URL.
 
-**Route parsing** (one route `GET /i/:publicId/:file`):
+| Kind | URL | Meaning |
+|---|---|---|
+| Permanent | `{PUBLIC_FILES_BASE_URL}/images/{publicId}/v{n}.{ext}` | Exactly version `n`. Content never changes. |
+| Thumbnail | `{PUBLIC_FILES_BASE_URL}/images/{publicId}/v{n}.thumb.webp` | Thumbnail of version `n`, always WebP. |
+| App preview (private) | `/preview/{publicId}/{slug}.v{n}.{ext}` and `…v{n}.thumb.webp` | Session-only; for local-disk dev and when no files domain is set. Never copied. |
+
+**Preview route parsing** (one route `GET /preview/:publicId/:file`, behind auth):
 ```
-pinned:  ^(?<slug>[a-z0-9-]{1,60})\.v(?<version>[1-9][0-9]{0,5})\.(?<ext>avif|webp|jpg|jpeg|png|gif)$
-latest:  ^(?<slug>[a-z0-9-]{1,60})\.(?<ext>avif|webp|jpg|jpeg|png|gif)$
+image:  ^(?<slug>[a-z0-9-]{1,60})\.v(?<version>[1-9][0-9]{0,5})\.(?<ext>avif|webp|jpg|jpeg|png|gif)$
+thumb:  ^(?<slug>[a-z0-9-]{1,60})\.v(?<version>[1-9][0-9]{0,5})\.thumb\.webp$
 ```
-- Look up by `publicId` (+ `version` when pinned). **`slug` is ignored**, so renames never break links.
+- Look up by `publicId` + `version`. **`slug` is ignored**, so renames never break the preview.
 - If `ext` does not match the stored version's extension → `404`.
-- On *latest*, `ext` must match the *current* version's extension. If the format changed after a replace, the old-extension latest URL returns `404`; `/i/{publicId}` (no extension) always works. The Share dialog uses the extension-less form only when asked.
+- The bucket URL contains no slug at all: it is the object key, so rename, move, star, and trash never change it.
 
 **When versions change**
 
 | Action | New version? | Effect |
 |---|---|---|
 | Upload | creates v1 | |
-| Replace image | v(n+1), becomes current | old versions kept |
-| Rename, move, star, trash, restore | no | URLs unchanged (slug is cosmetic) |
+| Replace image | v(n+1), becomes current | old versions kept; the new version has a new bucket URL |
+| Rename, move, star, trash, restore | no | object keys unchanged, so permanent URLs unchanged |
 | Restore an older version | no | `current_version` pointer moves back; no new object |
 | Prune | n/a | beyond `KEEP_VERSIONS` (default 5), oldest first; their permanent URLs then `404` |
 | Permanent delete | n/a | every version's objects deleted, then rows |
 
-Pruning never removes the current version.
+Pruning never removes the current version. There is no "latest" URL: resolving
+the current version needs the database, so anything that promised to update
+would die with the app.
 
-## 5. HTTP delivery
+## 5. Delivery
 
-**Pinned (`/i/.../x.v3.avif`) and thumbnails**
+**Bucket objects** are written with their stored MIME `Content-Type`
+(`ImageStore.putVersion`). The app cannot write `Cache-Control` (Guren's S3
+`PutOptions` carries only `contentType`/`metadata`, and app code must not import
+the AWS SDK), so the public files domain adds the headers:
+
 ```
+# Cloudflare cache rule on the files domain, path images/*
 Cache-Control: public, max-age=31536000, immutable
-ETag: "<sha256 first 16 hex>"
-```
-**Latest (`/i/{publicId}...`)**
-```
-Cache-Control: public, no-cache          # always revalidate; 304 when ETag matches
-ETag: "<sha256 first 16 hex>"
-```
-**All image responses**
-```
-Content-Type: <stored mime>
-Content-Length
-Content-Disposition: inline; filename="<slug>.v3.avif"     # ?download=1 → attachment
 X-Content-Type-Options: nosniff
-Cross-Origin-Resource-Policy: cross-origin
-Access-Control-Allow-Origin: *
-(no Set-Cookie, no Vary: Cookie)
+
+# Cloudflare rule: block /trash/* with 404
 ```
-- Support `GET` and `HEAD`. `If-None-Match` → `304` **before** touching storage.
-- `404` (with `Cache-Control: no-store`) for unknown `publicId`, unknown or pruned version, trashed image, extension mismatch, or malformed `file`.
+
+- Every key under `images/` is an immutable `(publicId, version)` object, so a
+  year-long cache is safe for that prefix.
+- Trashed objects live under `trash/` (§4), which the second rule makes
+  unreadable; the live key stops resolving the moment the object moves.
+- A year-long edge cache outlives a takedown: configure a purge on trash
+  (Cloudflare API token; not implemented) or keep the edge TTL short. A domain
+  with caching off answers 404 as soon as the move lands.
+- R2 settings: `STORAGE_DISK=s3`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`,
+  `S3_REGION=auto`, `acl: false`. Public read is a bucket policy/custom-domain
+  setting, never an object ACL written by the app.
+
+**Private preview (`/preview/...`, session required)** exists so the local UI
+still works with `STORAGE_DISK=local` (or before a files domain is configured):
+```
+Cache-Control: private, max-age=31536000, immutable
+Content-Type: <stored mime, or image/webp for a thumb>
+Content-Length
+Content-Disposition: inline; filename="<slug>.v{n}.{ext}"     # ?download=1 → attachment
+X-Content-Type-Options: nosniff
+```
+- `404` (with `Cache-Control: no-store`) for a guest, unknown publicId, unknown
+  or pruned version, trashed image, extension mismatch, or malformed `file`.
 - Do not do content negotiation (`Accept`). The stored format is the format.
 
-**Share page `/p/{publicId}`**: server-rendered `this.view()` (no hydration). Shows the image (permanent URL), name, dimensions, size, a download button, and OG/Twitter meta (`og:image` = permanent URL, `og:image:width/height`). `Cache-Control: public, no-cache`. 404 when trashed.
+## 6. Absolute URLs and the public files domain
 
-## 6. Absolute URLs
+`UrlBuilder` is the only place URLs are formatted. The app has no public base
+URL: page links are relative, and every shareable URL comes from
+`PUBLIC_FILES_BASE_URL`.
 
-`UrlBuilder` builds absolute URLs from `PUBLIC_BASE_URL` (falls back to the request origin). It is the only place URLs are formatted. It exposes `thumb`, `permanent`, `latest`, `page`, plus `markdown()` and `html()` snippets (`<img src="…" width height alt>`).
+| Env | Used for | Example |
+|---|---|---|
+| `PUBLIC_FILES_BASE_URL` (optional) | permanent links, grid/lightbox sources, snippets | `https://files.example.com/images/{id}/v3.avif` |
+
+- `permanent()` returns `{files base}/{object key}` or **null** without a files
+  domain. `view()` and `thumb()` return the same bucket URLs, falling back to the
+  private `/preview/...` route (relative) when the variable is unset.
+- Markdown and HTML snippets embed the permanent URL; without a files domain
+  they are null and the Share dialog explains that sharing is off.
+- The Share dialog offers **This version** and **Thumbnail** only, both
+  bucket-served. There is no "always latest" or share-page row: both need the
+  database and would die with the app.
+- `PUBLIC_FILES_BASE_URL` may point at a localhost domain in development; the
+  dialog warns that such links only work on this machine.
+
+**Trash and takedown.** Trashing moves every affected version's image and thumb
+objects under `trash/` before the row write (a folder covers its subtree);
+restoring moves them back after the row write. Permanent delete removes both
+locations. The files domain must block `/trash/*`, so a trashed image is a 404
+on the bucket without the app running. See §4 for the prefixes and §5 for the
+rule.
 
 ## 7. Write order and failure handling
 
@@ -136,12 +175,13 @@ Upload (`version = 1`) and Replace (`version = n+1`) share one routine:
 4. On any failure after step 2 → delete both objects (best effort), then surface the error.
 5. After success (replace only): prune beyond `KEEP_VERSIONS` (objects first, then rows). Prune failures are logged, not fatal.
 
-Permanent delete: delete objects first (`deleteMany`), then rows. If storage fails, keep the rows and report an error so the user can retry.
+Permanent delete: delete objects first (`deleteMany`, live and `trash/` keys), then rows. If storage fails, keep the rows and report an error so the user can retry. Trashing and restoring move the same objects between the two prefixes before (trash) or after (restore) the row write, with an object rollback when the row write fails.
 
 ## 8. Test matrix
 
 - Converter: jpeg→webp, png→avif (skipped if unsupported), resize without enlargement, auto-rotate, EXIF stripped, animated gif→animated webp, avif rejected for animated, oversize and pixel-bomb rejected, svg/heic/text → 415.
 - Naming: slug edge cases (unicode, emoji, empty, very long), `publicId` uniqueness and charset.
 - Versioning: replace creates v2 and keeps v1 readable; latest serves v2; prune respects `KEEP_VERSIONS` and never removes current; restoring v1 moves the pointer only.
-- Delivery: headers per §5, `304` without a storage read (assert with a spy on the disk), `HEAD`, `404` cases, no `Set-Cookie`, ext mismatch, slug ignored.
-- Cleanup: simulated DB failure leaves no objects; permanent delete removes every version's objects.
+- Delivery: bucket keys carry the stored `Content-Type`; the files-domain rules are documented, not asserted in unit tests (no Cloudflare API). Private preview: headers per §5, `404` cases, extension mismatch, slug ignored, guest redirected to `/login`, no `/i`, `/t`, `/p` routes left.
+- URLs: `permanent()` is null without a files domain; with it, `{files base}/images/...` for permanent, view and thumb, and no app-origin URL anywhere in a snippet.
+- Cleanup: simulated DB failure leaves no objects; permanent delete removes every version's objects. Trash moves both objects of every affected version under `trash/` (including a folder's descendants) and restore moves them back; permanent delete removes the leftovers at both keys.

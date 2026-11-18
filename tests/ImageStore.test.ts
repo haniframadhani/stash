@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { StorageManager } from '@guren/core'
-import { ImageStore, imageKey, newPublicId, thumbKey } from '../app/Services/ImageStore.js'
+import { ImageStore, imageKey, liveObjectKey, newPublicId, thumbKey, trashObjectKey } from '../app/Services/ImageStore.js'
 
 // Keys live only here (docs/IMAGE_PIPELINE.md §4); the contract with the disk
 // itself is tests/storage-contract.test.ts.
@@ -19,6 +19,56 @@ describe('ImageStore keys', () => {
     expect(id).toMatch(/^[A-Za-z0-9]{12}$/)
     const ids = new Set(Array.from({ length: 200 }, () => newPublicId()))
     expect(ids.size).toBe(200)
+  })
+})
+
+describe('ImageStore trash keys (task 6.3)', () => {
+  it('prefixes keys with trash/ exactly once', () => {
+    expect(trashObjectKey('images/Ab3xY9kQ2mZ1/v1.webp')).toBe('trash/images/Ab3xY9kQ2mZ1/v1.webp')
+    expect(trashObjectKey('trash/images/Ab3xY9kQ2mZ1/v1.webp')).toBe('trash/images/Ab3xY9kQ2mZ1/v1.webp')
+    expect(liveObjectKey('trash/images/Ab3xY9kQ2mZ1/v1.webp')).toBe('images/Ab3xY9kQ2mZ1/v1.webp')
+    expect(liveObjectKey('images/Ab3xY9kQ2mZ1/v1.webp')).toBe('images/Ab3xY9kQ2mZ1/v1.webp')
+  })
+
+  it('hides both objects of a version and restores them', async () => {
+    const store = memoryStore()
+    const keys = await store.putVersion({
+      publicId: 'Ab3xY9kQ2mZ1', version: 1, ext: 'webp', mime: 'image/webp',
+      image: Buffer.from('image'), thumb: Buffer.from('thumb'),
+    })
+
+    const moved = await store.hideVersions([{ version: 1, ext: 'webp' }], 'Ab3xY9kQ2mZ1')
+
+    expect(moved.sort()).toEqual([keys.storageKey, keys.thumbKey].sort())
+    expect(await store.readImage(keys.storageKey)).toBeNull()
+    expect(await store.readImage(trashObjectKey(keys.storageKey))).toEqual(Buffer.from('image'))
+
+    // Idempotent: a retry after a partial failure must not nest the prefix.
+    expect(await store.hideVersions([{ version: 1, ext: 'webp' }], 'Ab3xY9kQ2mZ1')).toEqual([])
+
+    await store.restoreVersions(moved)
+    expect(await store.readImage(keys.storageKey)).toEqual(Buffer.from('image'))
+    expect(await store.readThumb(keys.thumbKey)).toEqual(Buffer.from('thumb'))
+    expect(await store.readImage(trashObjectKey(keys.storageKey))).toBeNull()
+  })
+
+  it('refuses to hide or restore an object it cannot find', async () => {
+    const store = memoryStore()
+    await expect(store.hideVersions([{ version: 9, ext: 'webp' }], 'Ab3xY9kQ2mZ1')).rejects.toThrow(/missing/)
+    await expect(store.restoreVersions(['images/Ab3xY9kQ2mZ1/v9.webp'])).rejects.toThrow(/missing/)
+  })
+
+  it('permanent delete removes objects at both the live and trash keys', async () => {
+    const store = memoryStore()
+    const keys = await store.putVersion({
+      publicId: 'Ab3xY9kQ2mZ1', version: 1, ext: 'webp', mime: 'image/webp',
+      image: Buffer.from('image'), thumb: Buffer.from('thumb'),
+    })
+    await store.hideVersions([{ version: 1, ext: 'webp' }], 'Ab3xY9kQ2mZ1')
+
+    expect(await store.deleteVersionObjects([{ version: 1, ext: 'webp' }], 'Ab3xY9kQ2mZ1')).toBe(2)
+    expect(await store.readImage(trashObjectKey(keys.storageKey))).toBeNull()
+    expect(await store.readThumb(trashObjectKey(keys.thumbKey))).toBeNull()
   })
 })
 
