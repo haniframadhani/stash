@@ -9,6 +9,7 @@ public/assets/
 docs/plans/**/*.html
 *.plan.html
 weed_data/*
+volumes/
 storage/app/
 public/storage
 test-results/

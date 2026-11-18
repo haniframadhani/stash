@@ -225,32 +225,26 @@ Guren is new and its APIs are not in your training data. Before writing code aga
 ## Stash setup commands
 
 ```bash
-docker compose up -d          # storage + bucket init (SeaweedFS by default)
+# Production bundles no S3: point STORAGE_DISK/S3_* at your own bucket, or use local.
 bun install
 cp .env.example .env          # scaffold already creates .env with APP_KEY; merge, don't overwrite
 bun run db:migrate && bun run db:seed
-RUN_S3_TESTS=1 bun test tests/storage-contract.test.ts   # against the live S3 endpoint
+RUN_S3_TESTS=1 bun test tests/storage-contract.test.ts   # against the configured S3 endpoint
+docker compose -f docker-compose.dev.yml up -d --build   # dev stack: bundled SeaweedFS + app on :3334
 ```
 
 All other commands (`dev`, `codegen`, `typecheck`, `test`, `guren check|audit|gate`) are listed under Development Commands. Run `bunx guren gate` before declaring done.
 
-## Local S3 storage: check before starting (local development only)
+## S3 storage: production vs development
 
-Applies to local development only, whenever the work touches SeaweedFS or any other S3-compatible service (MinIO, etc.) that `docker compose` provides. It does not apply to production or CI.
+**Production (`docker-compose.yml`) bundles no S3 service.** Storage is the bucket configured in `.env` (Cloudflare R2 for this owner), or `STORAGE_DISK=local` on a volume. Never add SeaweedFS/MinIO to that file.
 
-**Before doing anything that needs the storage backend** (running the app against S3, `RUN_S3_TESTS=1`, seeding, debugging uploads), check whether the compose stack is already up:
+**Development (`docker-compose.dev.yml`) bundles its own SeaweedFS** (`weed-mini` + one-shot `bucket-init`, bucket `my-bucket`, endpoint `http://localhost:8333` from the host / `http://weed-mini:8333` inside the network) with every volume bind-mounted under `./volumes/`. Start it only through that file.
 
-```bash
-docker compose ps                       # is the storage service listed and "running"/"healthy"?
-docker ps --filter "name=seaweed"       # catches a container started outside this compose project
-```
-
-- **If it is running, reuse it.** Do not run `docker compose up` again, and never `docker run` a new SeaweedFS (or MinIO, etc.) container by hand.
-- **If it is not running**, start it only through the project's compose file: `docker compose up -d`. This is the one allowed way to start storage.
-- **If a port is already in use** (e.g. S3 on 8333), assume a storage container already exists. Find it with `docker ps` and reuse it. Do not start a second one on another port.
-- Do not `docker compose down`, `down -v`, restart, or recreate the storage service unless the user asks. `-v` deletes the bucket data.
-- Do not change the compose file or the S3 endpoint/credentials in `.env` just to get a fresh container. Point at the existing one.
-- If the check shows the stack is unhealthy, report it to the user instead of replacing it.
+- Never `docker run` a storage container: use `docker compose -f docker-compose.dev.yml up -d`, and reuse a stack that is already up.
+- Before work that needs storage (`RUN_S3_TESTS=1`, seeding, debugging uploads), check first: `docker compose -f docker-compose.dev.yml ps`, or the endpoint in `.env`.
+- Use the endpoint and credentials already in `.env` / the dev file. Do not change them, and do not start a second endpoint on another port.
+- If the endpoint is unhealthy, report it to the user instead of replacing it. `down -v` deletes app volumes (`data/`, `storage/app`) — ask first. On the dev file the data is a bind mount under `./data` and `./volumes`, so deleting those directories deletes dev data; never do that unasked.
 
 ## Authorization rules (critical)
 

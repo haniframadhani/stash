@@ -1,0 +1,92 @@
+# Stash — development. Self-contained: SeaweedFS runs here as the S3 backend,
+# every volume is a host bind mount, so data survives `docker compose down`
+# and is visible on the host.
+#
+#   docker compose -f docker-compose.dev.yml up -d --build   # app on :3334
+#
+# Production is docker-compose.yml (no S3 service, bucket from .env).
+name: stash-dev
+
+services:
+  weed-mini:
+    image: chrislusf/seaweedfs:4.53
+    command: mini -dir=/data
+    ports:
+      - '8333:8333' # S3 endpoint (also for a host `bun run dev`)
+      - '8888:8888' # Filer UI
+      - '9333:9333' # Master UI
+      - '12535:12535' # Admin UI
+    volumes:
+      - ./volumes/seaweedfs:/data
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:9333/cluster/status']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: creates the bucket the dev app expects, then exits. Idempotent.
+  bucket-init:
+    image: chrislusf/seaweedfs:4.53
+    depends_on:
+      weed-mini:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '-c']
+    environment:
+      S3_BUCKET: my-bucket
+    command:
+      - |
+        until echo "s3.bucket.list" | weed shell -master=weed-mini:9333 2>/dev/null | grep -q "$$S3_BUCKET"; do
+          echo "s3.bucket.create -name $$S3_BUCKET" | weed shell -master=weed-mini:9333 || true
+          sleep 1
+        done
+        echo "bucket $$S3_BUCKET ready"
+
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+      APP_NAME: Stash
+      # Dev-only signing key; production reads APP_KEY from .env.
+      APP_KEY: base64:c3Rhc2gtZG9ja2VyLWRldi1rZXktMzItYnl0ZXMhISE=
+      APP_URL: http://localhost:3334
+      PORT: 3334
+      HOST: 0.0.0.0
+      # Own SQLite file next to the owner's, in the repo's bind-mounted data/.
+      DATABASE_URL: ./data/stash-dev.db
+      # The bundled SeaweedFS, reached by service name inside this network.
+      STORAGE_DISK: s3
+      S3_ENDPOINT: http://weed-mini:8333
+      S3_ACCESS_KEY_ID: admin
+      S3_SECRET_ACCESS_KEY: secret
+      S3_BUCKET: my-bucket
+      S3_REGION: us-east-1
+      # Local disk would make links relative to this container; blank = sharing
+      # off and the UI uses the private /preview route.
+      PUBLIC_FILES_BASE_URL: ''
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: change-me-please
+      SESSION_DRIVER: database
+    depends_on:
+      bucket-init:
+        condition: service_completed_successfully
+    # Bind mounts: the dev database sits in the repo beside the host's own, and
+    # image bytes live in the bind-mounted SeaweedFS volume above.
+    volumes:
+      - ./data:/app/data
+    ports:
+      - '3334:3334'
+    command:
+      - sh
+      - -c
+      - >-
+        bunx guren db:migrate && bunx guren db:seed --force &&
+        bun bin/serve.ts
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'bun', '-e', "fetch('http://127.0.0.1:3334/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

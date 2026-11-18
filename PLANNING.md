@@ -31,7 +31,7 @@ A single-user, self-hosted, Google Drive-style manager for images, stored in any
 | Requirement | How it is met |
 |---|---|
 | Single user only | `guren make:auth --minimal`: login only, **no register route**. One user is seeded from `ADMIN_EMAIL` / `ADMIN_PASSWORD`. |
-| Local hosting, spin up anything | `docker-compose.yml` (storage + one-shot bucket init, optional app container). Dev runs on the host. |
+| Local hosting, spin up anything | Two compose files: `docker-compose.yml` (production: app only, uses your bucket) and `docker-compose.dev.yml` (development: bundled SeaweedFS + app, all bind mounts). Dev on the host is `bun run dev`. |
 | SQLite, no DB server | Guren's default SQLite via Drizzle (`./data/*.db`). Sessions are DB-backed in the same file. |
 | Easy to share link | Share dialog: the pinned bucket URL and its thumbnail, plus Markdown and HTML snippets. Every copied URL is `PUBLIC_FILES_BASE_URL/images/{publicId}/v{n}.{ext}`, so it opens with the app off. |
 | Create / update / delete authorized | Every non-GET route sits inside the `auth` middleware group. A test enforces it (`AGENTS.md`). |
@@ -231,8 +231,8 @@ export default defineStorageConfig((env) => {
 
 | Backend | `S3_ENDPOINT` | Notes |
 |---|---|---|
-| SeaweedFS | `http://localhost:8333` | Default in `docker-compose.yml`. Bucket must be created (init container does it). |
-| MinIO | `http://localhost:9000` | Commented example in compose. Create the bucket in its console. |
+| SeaweedFS | `http://localhost:8333` | What `docker-compose.dev.yml` runs for you (`weed-mini`, bucket created by `bucket-init`); host `bun run dev` reaches the same endpoint. |
+| MinIO | `http://localhost:9000` | Same: external to this repo. Create the bucket in its console. |
 | Garage | `http://localhost:3900` | Region usually `garage`. |
 | Cloudflare R2 | `https://<acct>.r2.cloudflarestorage.com` | Region `auto`, `acl: false`. |
 | AWS S3 | (omit) | Real region. |
@@ -249,7 +249,9 @@ Backends differ in path-style vs virtual-host addressing; task 0.5 verifies the 
 ## 11. Local hosting and sharing
 
 - `docker compose up -d` starts storage and creates the bucket. `bun run dev` runs the app on `http://localhost:3333`.
-- Production-ish: `docker compose --profile app up -d` runs the app container (Dockerfile from `bunx guren deploy --target docker`). It stays on the owner's machine or LAN; it is **not** an internet service.
+- Two files, two worlds, and **no S3 in production**:
+  - **`docker-compose.yml` (production)**: `app` on `${APP_PORT:-3333}` from the Dockerfile, reading `APP_KEY`, `ADMIN_*` and the bucket from `.env` (R2/S3 — nothing S3-related runs in this stack). The one-shot `app-migrate` runs `db:migrate && db:seed --force` before it; SQLite lives in the `stash-data` volume. It stays on the owner's machine or LAN; it is **not** an internet service. `APP_PORT` moves only the host port, for when `bun run dev` already holds 3333.
+  - **`docker-compose.dev.yml` (development)**: bundles its own SeaweedFS (`weed-mini` + one-shot `bucket-init`) and runs `app-dev` on `:3334` against it, `STORAGE_DISK=s3` pointed at `http://weed-mini:8333`. **Every volume is a host bind mount** — `./data` (its own `stash-dev.db`) and `./storage/app` — plus `./volumes/seaweedfs` for the bundled bucket, so dev data is visible, editable and survives `down`. Dev carries its own `APP_KEY`, owner and ports, so it cannot touch production rows or objects.
 - **Sharing needs only the bucket.** Create a public domain for the bucket (Cloudflare R2 custom domain), set `PUBLIC_FILES_BASE_URL` to it, and add the two Cloudflare rules in `docs/IMAGE_PIPELINE.md` §6: cache `images/*` for a year, and **block `/trash/*`**. Copied links then open while the app (and the whole machine) is off. Without the variable the Share dialog explains that sharing is off; it never hands out localhost URLs.
 - **Back up both** the `data/` folder (SQLite) and the storage volume or bucket. Losing either breaks the app.
 
@@ -260,7 +262,7 @@ Backends differ in path-style vs virtual-host addressing; task 0.5 verifies the 
 ```
 stash/
 ├── PLANNING.md  AGENTS.md  TASKS.md  docs/
-├── docker-compose.yml  .env.example
+├── docker-compose.yml  docker-compose.dev.yml  .env.example
 ├── config/            env.ts  storage.ts  images.ts
 ├── db/                schema.ts  migrations/  seeders/
 ├── routes/            web.ts  auth.ts  drive.ts (private; includes /preview)
@@ -308,7 +310,7 @@ Checklist with acceptance criteria: `TASKS.md`.
 
 ## 15. Definition of done (v1)
 
-- Fresh clone → `cp .env.example .env`, `docker compose up -d`, `bun install`, `bun run db:migrate && bun run db:seed`, `bun run dev` works.
+- Fresh clone → `cp .env.example .env`, `bun install`, `bun run db:migrate && bun run db:seed`, `bun run dev` works (no S3 service to start; `STORAGE_DISK=local` needs none).
 - Sign in, drop 20 photos, review and convert to WebP, confirm, and all appear with thumbnails; savings are shown.
 - A copied permanent link opens in a private window **with the app stopped**; after a replace the new version has a new URL and the old pinned link still shows the old version.
 - Bucket objects carry the right `Content-Type`; the files domain adds `Cache-Control: public, max-age=31536000, immutable`, and blocks `/trash/*`.
