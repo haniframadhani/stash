@@ -1,4 +1,4 @@
-import { beforeAll, describe, it, beforeEach, afterEach, expect } from 'bun:test'
+import { beforeAll, describe, it, afterEach, expect } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 
 const savedEnv = { ...process.env }
@@ -168,6 +168,8 @@ if (s3TestsEnabled) {
       }
     })
 
+    // R2 round trips are slower than a local disk: the whole contract takes ~5s
+    // from a warm connection, so bun's 5s default is too tight.
     it('round-triputils put/get/exists/delete/deleteMany/metadata against S3', async () => {
       const driver = await createDriver('s3', {
         S3_BUCKET: process.env.S3_BUCKET!,
@@ -183,7 +185,7 @@ if (s3TestsEnabled) {
         S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY!,
         S3_REGION: process.env.S3_REGION!,
       })
-    })
+    }, 30_000)
   })
 } else {
   // Conditionally skip the S3 describe by providing no it callbacks

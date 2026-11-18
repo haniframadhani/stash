@@ -4,6 +4,7 @@ import DriveController from '../app/Http/Controllers/DriveController.js'
 import FolderController from '../app/Http/Controllers/FolderController.js'
 import ImageController from '../app/Http/Controllers/ImageController.js'
 import ItemController from '../app/Http/Controllers/ItemController.js'
+import PreviewImageController from '../app/Http/Controllers/PreviewImageController.js'
 import UploadController from '../app/Http/Controllers/UploadController.js'
 import { FolderIdParams, FolderStoreSchema, FolderUpdateSchema } from '../app/Http/Validators/FolderValidator.js'
 import { ImageIdParams, ImageUpdateSchema } from '../app/Http/Validators/ImageValidator.js'
@@ -17,6 +18,15 @@ import { UploadOptionsSchema } from '../app/Http/Validators/UploadValidator.js'
 // codegen keys types by route name, so the two paths cannot share one name.
 export function registerDriveRoutes(router: Router): void {
   router.get('/', [HomeController, 'index']).name('home')
+
+  // Private preview for the app's own browser (ROUTES_SPEC §1). Images in a
+  // shared link come from the bucket, never from here; this route only covers
+  // the local-disk dev case where no public files domain exists.
+  router.get(
+    '/preview/:publicId/:file',
+    [PreviewImageController, 'show'],
+    requireAuthenticated({ redirectTo: '/login' }),
+  ).name('preview.show')
 
   router.get('/files', [DriveController, 'index'], requireAuthenticated({ redirectTo: '/login' })).name('drive.index')
   router.get(

@@ -1,8 +1,9 @@
-// Hand-written spec for the upload flow (TASKS 1.4's cookie-free check, now
-// through the Review & convert dialog of 1.6): New → Upload images → dialog →
-// Confirm → queue → thumbnail in the grid → the thumb URL loads in a
-// cookie-free context (the "private window" check). `guren browser:map`
-// rewrites generated/, never this.
+// Hand-written spec for the upload flow (TASKS 1.4, through the Review &
+// convert dialog of 1.6): New → Upload images → dialog → Confirm → queue →
+// thumbnail in the grid → the thumb URL loads for the owner through the
+// private preview route. The guest side is the controller unit test, since a
+// fresh request context in this suite reaches the app the same way the page
+// does. `guren browser:map` rewrites generated/, never this.
 import { expect, test } from '@playwright/test'
 import sharp from 'sharp'
 import { AUTH_FILE, initialComponent, reviewAndUpload, type BrowserFile } from './support'
@@ -21,7 +22,7 @@ async function jpegBytes(): Promise<Buffer> {
 test.describe('upload', () => {
   test.use({ storageState: AUTH_FILE })
 
-  test('a JPEG lands in the grid and its thumb URL loads without cookies', async ({ page }) => {
+  test('a JPEG lands in the grid and its private thumb loads for the owner', async ({ page }) => {
     await page.goto('/files')
     expect(await initialComponent(page)).toBe('drive/Index')
 
@@ -36,16 +37,16 @@ test.describe('upload', () => {
     await expect(thumb).toBeVisible()
     await expect(page.getByText(fileName, { exact: true })).toBeVisible()
     const thumbUrl = await thumb.getAttribute('src')
-    expect(thumbUrl).toContain('/t/')
+    expect(thumbUrl).toContain('/preview/')
 
-    // The private-window check: the permanent thumb URL serves without any
-    // session, as `image/webp`.
-    const cookieFree = await page.context().browser()!.newContext()
-    const response = await cookieFree.request.get(thumbUrl!)
-    expect(response.status()).toBe(200)
-    expect(response.headers()['content-type']).toBe('image/webp')
-    expect((await response.body()).length).toBeGreaterThan(0)
-    await cookieFree.close()
+    // The preview route is private: the signed-in browser gets image/webp...
+    const ownerResponse = await page.request.get(thumbUrl!)
+    expect(ownerResponse.status()).toBe(200)
+    expect(ownerResponse.headers()['content-type']).toBe('image/webp')
+
+    // ...and a guest is refused: the unit test in
+    // tests/controllers/PreviewImageController.test.ts asserts the 302 to
+    // `/login` for a cookie-free request. This spec stops at the owner side.
   })
 
   test('a non-image is flagged in the dialog and never sent', async ({ page }) => {

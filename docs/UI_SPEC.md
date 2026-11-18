@@ -87,7 +87,7 @@ Opens when files are dropped, pasted, or chosen. **Nothing is uploaded until Con
 
 **Move to… picker:** a small centered dialog listing every active folder as a depth-indented `<select>`, `My Files` (root) first. Moving a folder disables itself and its descendants; the current folder is disabled (a no-op). Confirm posts `items.move`; Cancel or a backdrop click closes without a request.
 
-**ImageCard (grid):** `aspect-[4/3]` thumbnail (`object-cover`, explicit width/height from the DB to avoid layout shift), file name below, a small format badge (`AVIF` / `WEBP`), star badge if starred. Checkbox top-left on hover or when selected. ⋮ top-right. Thumbnails use the permanent thumb URL.
+**ImageCard (grid):** `aspect-[4/3]` thumbnail (`object-cover`, explicit width/height from the DB to avoid layout shift), file name below, a small format badge (`AVIF` / `WEBP`), star badge if starred. Checkbox top-left on hover or when selected. ⋮ top-right. Thumbnails use `urls.thumb` (the bucket thumb, or the private preview route when sharing is off).
 
 **List view:** columns Name · Format · Dimensions · Size · Modified; 40px thumbnail; click a header to sort.
 
@@ -101,15 +101,18 @@ Opens when files are dropped, pasted, or chosen. **Nothing is uploaded until Con
 
 ## 5. Share dialog (🔗, also in the context menu and the selection bar)
 
+The app is local and stops answering when its machine is off, so a shareable
+link may only point at the bucket's public files domain. There is no
+"always latest" and no share page: both would need the app online.
+
 ```
 ┌ Share "Sunset beach" ─────────────────────────────────────────┐
 │ Anyone with the link can view. No login required.             │
 │                                                               │
-│ Always latest   https://…/i/Xk3…/sunset-beach.avif    [Copy]  │
-│   Updates when you replace the image.                         │
-│ This version    https://…/i/Xk3…/sunset-beach.v3.avif [Copy]  │
-│   Permanent. Never changes.                                   │
-│ Share page      https://…/p/Xk3…                      [Copy]  │
+│ This version  https://files.example.com/images/Xk3…/v3.avif   │
+│   Permanent. Never changes.                            [Copy] │
+│ Thumbnail     https://files.example.com/images/Xk3…/v3.thumb  │
+│   320 px wide. Permanent.                              [Copy] │
 │                                                               │
 │ Embed   [ Markdown | HTML ]   ![Sunset beach](…v3.avif)  [Copy]│
 │ ⚠ AVIF may not display in some chat apps and older viewers.   │
@@ -117,10 +120,23 @@ Opens when files are dropped, pasted, or chosen. **Nothing is uploaded until Con
 └───────────────────────────────────────────────────────────────┘
 ```
 
-- URLs come from the server (`urls.*`), built with `PUBLIC_BASE_URL`.
-- If `PUBLIC_BASE_URL` points at `localhost`, show a hint: "Only reachable on this machine. Set PUBLIC_BASE_URL to share with others."
-- Multi-select + Copy link copies one URL per line (permanent links).
-- Implemented in task 3.3 (R1 MVP): Always latest, This version, the Markdown/HTML embed, the AVIF warning and the localhost hint; 🔗 opens it from the lightbox and the context menu. The share-page row lands with 3.4; the selection-bar 🔗 and multi-select copy with R1.2.
+Without `PUBLIC_FILES_BASE_URL` (`filesBaseUrl: null`) the dialog has nothing to
+offer and says so instead of showing broken links:
+
+```
+┌ Share "Sunset beach" ─────────────────────────────────────────┐
+│ Share links come from the bucket, not this app.               │
+│ Sharing is off. Set PUBLIC_FILES_BASE_URL to the bucket's     │
+│ public domain so links open while this app is closed;         │
+│ previews stay private to this machine.                        │
+└───────────────────────────────────────────────────────────────┘
+```
+
+- URLs come from the server (`urls.*`, built by `UrlBuilder` from `PUBLIC_FILES_BASE_URL` + the `ImageStore` key); nothing is rebuilt on the client.
+- The embed snippets use the permanent (bucket) URL and are hidden when sharing is off, as are all Copy buttons.
+- If the files domain is `localhost`, show a hint: "This files domain is local. Use the bucket's public domain to share."
+- Multi-select + Copy link copies one URL per line (permanent links); with sharing off the action is disabled.
+- Implemented in task 3.3 (R1 MVP, sharing through the app) and reworked in 6.3 (bucket-only links, no latest or share page); 🔗 opens it from the lightbox and the context menu. The selection-bar 🔗 and multi-select copy come with R1.2.
 
 ## 6. Versions (details panel)
 

@@ -7,7 +7,7 @@ import { Folder } from '../app/Models/Folder.js'
 import { Image, type ImageRecord } from '../app/Models/Image.js'
 import { ImageVersion } from '../app/Models/ImageVersion.js'
 import { User } from '../app/Models/User.js'
-import { ImageStore, imageKey, newPublicId, thumbKey } from '../app/Services/ImageStore.js'
+import { ImageStore, imageKey, newPublicId, thumbKey, trashObjectKey } from '../app/Services/ImageStore.js'
 import { toSlug } from '../app/Services/Slug.js'
 import { deleteForever, emptyTrash, restoreItems, trashItems } from '../app/Services/Trash.js'
 
@@ -69,9 +69,14 @@ describe('trash service (task 4.2)', () => {
     const folder = await Folder.create({ name: 'Folder' })
     const image = await seedImage('One', folder.id, seeded)
 
-    await trashItems({ imageIds: [image.id], folderIds: [] })
+    await trashItems({ imageIds: [image.id], folderIds: [] }, store)
 
     expect((await Image.find(image.id))?.deletedAt).not.toBeNull()
+    // Task 6.3: the bytes leave the live key at once, so a files domain that
+    // serves the bucket directly stops answering the public link.
+    expect(await seeded.disk.exists(imageKey(image.publicId, 1, 'webp'))).toBe(false)
+    expect(await seeded.disk.exists(trashObjectKey(imageKey(image.publicId, 1, 'webp')))).toBe(true)
+    expect(await seeded.disk.exists(trashObjectKey(thumbKey(image.publicId, 1)))).toBe(true)
   })
 
   it('a trashed folder hides its descendants and restore brings them back', async () => {
@@ -83,13 +88,19 @@ describe('trash service (task 4.2)', () => {
 
     // Trash the whole subtree: the child (so it can be restored on its own)
     // and the parent.
-    await trashItems({ imageIds: [], folderIds: [child.id, parent.id] })
+    await trashItems({ imageIds: [], folderIds: [child.id, parent.id] }, store)
+    // The folder's descendant image is hidden too, so its objects moved.
+    expect(await seeded.disk.exists(imageKey(image.publicId, 1, 'webp'))).toBe(false)
+    expect(await seeded.disk.exists(trashObjectKey(imageKey(image.publicId, 1, 'webp')))).toBe(true)
     // Restoring the child alone sends it to the root: its parent is still trashed.
-    await restoreItems({ imageIds: [], folderIds: [child.id] })
+    await restoreItems({ imageIds: [], folderIds: [child.id] }, store)
     expect((await Folder.find(child.id))?.parentId).toBeNull()
 
     // The image was never individually trashed: it stayed where it was.
     expect((await Image.find(image.id))?.deletedAt).toBeNull()
+    // Its folder is back, and so are its bytes at the live key.
+    expect(await seeded.disk.exists(imageKey(image.publicId, 1, 'webp'))).toBe(true)
+    expect(await seeded.disk.exists(trashObjectKey(imageKey(image.publicId, 1, 'webp')))).toBe(false)
   })
 
   it('restore with a trashed parent goes to the root and suffixes a clash', async () => {
@@ -100,19 +111,54 @@ describe('trash service (task 4.2)', () => {
 
     // Trash the image, then trash its folder: the image is restorable, but
     // its parent path is dead.
-    await trashItems({ imageIds: [trashed.id], folderIds: [child.id, parent.id] })
-    await restoreItems({ imageIds: [trashed.id], folderIds: [] })
+    await trashItems({ imageIds: [trashed.id], folderIds: [child.id, parent.id] }, seeded.store)
+    await restoreItems({ imageIds: [trashed.id], folderIds: [] }, seeded.store)
 
     const restored = await Image.find(trashed.id)
     expect(restored?.deletedAt).toBeNull()
     expect(restored?.folderId).toBeNull()
+    expect(await seeded.disk.exists(imageKey(trashed.publicId, 1, 'webp'))).toBe(true)
+  })
+
+  it('moves nothing when a trashed object fails to move', async () => {
+    const seeded = memoryStore()
+    const image = await seedImage('Partial', null, seeded)
+    const realMove = seeded.disk.move.bind(seeded.disk)
+    let calls = 0
+    seeded.disk.move = async (from, to) => {
+      calls++
+      if (calls === 2) throw new Error('storage down')
+      return realMove(from, to)
+    }
+
+    await expect(trashItems({ imageIds: [image.id], folderIds: [] }, seeded.store)).rejects.toThrow('storage down')
+
+    // The row is untouched and the one object that did move is back home: an
+    // image is never half-hidden.
+    expect((await Image.find(image.id))?.deletedAt).toBeNull()
+    expect(await seeded.disk.exists(imageKey(image.publicId, 1, 'webp'))).toBe(true)
+    expect(await seeded.disk.exists(thumbKey(image.publicId, 1))).toBe(true)
+    expect(await seeded.disk.exists(trashObjectKey(imageKey(image.publicId, 1, 'webp')))).toBe(false)
+  })
+
+  it('keeps an image in the Trash when its objects cannot come back', async () => {
+    const seeded = memoryStore()
+    const image = await seedImage('Lost', null, seeded)
+    await trashItems({ imageIds: [image.id], folderIds: [] }, seeded.store)
+    // One object went missing: a restore must not report success with a broken image.
+    await seeded.disk.delete(trashObjectKey(thumbKey(image.publicId, 1)))
+
+    await expect(restoreItems({ imageIds: [image.id], folderIds: [] }, seeded.store)).rejects.toThrow(/missing/)
+
+    expect((await Image.find(image.id))?.deletedAt).not.toBeNull()
+    expect(await seeded.disk.exists(imageKey(image.publicId, 1, 'webp'))).toBe(false)
   })
 
   it("delete forever removes every version's objects and rows", async () => {
     const seeded = memoryStore()
     const store = seeded.store
     const image = await seedImage('Three versions', null, seeded, 3)
-    await trashItems({ imageIds: [image.id], folderIds: [] })
+    await trashItems({ imageIds: [image.id], folderIds: [] }, store)
 
     const result = await deleteForever({ imageIds: [image.id], folderIds: [] }, store)
 
@@ -122,6 +168,9 @@ describe('trash service (task 4.2)', () => {
     for (const version of [1, 2, 3]) {
       expect(await seeded.disk.exists(imageKey(image.publicId, version, 'webp'))).toBe(false)
       expect(await seeded.disk.exists(thumbKey(image.publicId, version))).toBe(false)
+      // The objects moved to trash/ when the image went away, so delete both.
+      expect(await seeded.disk.exists(trashObjectKey(imageKey(image.publicId, version, 'webp')))).toBe(false)
+      expect(await seeded.disk.exists(trashObjectKey(thumbKey(image.publicId, version)))).toBe(false)
     }
   })
 
@@ -139,7 +188,7 @@ describe('trash service (task 4.2)', () => {
     const folder = await Folder.create({ name: 'Doomed' })
     const image = await seedImage('Inside', folder.id, seeded)
 
-    await trashItems({ imageIds: [image.id], folderIds: [folder.id] })
+    await trashItems({ imageIds: [image.id], folderIds: [folder.id] }, store)
     const result = await deleteForever({ imageIds: [], folderIds: [folder.id] }, store)
 
     expect(result.deleted).toBe(2)
@@ -153,7 +202,7 @@ describe('trash service (task 4.2)', () => {
     const store = seeded.store
     const doomed = await seedImage('Doomed', null, seeded)
     const kept = await seedImage('Kept', null, seeded)
-    await trashItems({ imageIds: [doomed.id], folderIds: [] })
+    await trashItems({ imageIds: [doomed.id], folderIds: [] }, store)
 
     await emptyTrash(store)
 

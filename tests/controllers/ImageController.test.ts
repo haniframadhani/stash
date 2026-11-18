@@ -141,17 +141,16 @@ describe('image routes (task 2.2)', () => {
     expect(updatedVersion?.ext).toBe('webp')
   })
 
-  it('keeps the old permanent URL working after rename', async () => {
+  it('keeps the pinned preview URL working after rename', async () => {
     const client = await authClient()
     const { image, publicId, oldSlug, bytes } = await seedImage()
     await client.patch(`/images/${image.id}`, { name: 'New name' })
 
     // Old slug, version 1 still served (lookup ignores slug)
-    const response = await http.get(`/i/${publicId}/${oldSlug}.v1.webp`).assertOk()
+    const response = await client.get(`/preview/${publicId}/${oldSlug}.v1.webp`).assertOk()
     response
       .assertHeader('Content-Type', 'image/webp')
       .assertHeader('Content-Length', String(bytes.length))
-      .assertHeaderMissing('Set-Cookie')
     expect(await response.text()).toBe(bytes.toString())
   })
 

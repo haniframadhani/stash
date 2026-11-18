@@ -26,7 +26,7 @@ function uniqueName(prefix: string): string {
 
 interface PageImage {
   name: string
-  urls: { permanent: string, thumb: string }
+  urls: { view: string, thumb: string, permanent: string | null }
 }
 
 async function uploadOne(page: Page, name: string): Promise<void> {
@@ -65,9 +65,9 @@ async function createFolder(page: Page, name: string): Promise<void> {
 test.describe('rename', () => {
   test.use({ storageState: AUTH_FILE })
 
-  test('⋮ rename keeps the old permanent URL working', async ({ page }) => {
+  test('⋮ rename keeps the old pinned preview URL working', async ({ page }) => {
     const original = uniqueName('rename-source')
-    // The upload answer carries the permanent URL: the page props after a full
+    // The upload answer carries the object URLs: the page props after a full
     // load omit the deferred images (and a client visit never rewrites them).
     let uploaded: PageImage | undefined
     page.on('response', async (response) => {
@@ -79,20 +79,22 @@ test.describe('rename', () => {
     await page.goto('/files')
     await uploadOne(page, original)
     await expect.poll(() => uploaded?.name).toBe(original)
-    const permanentUrl = new URL(uploaded!.urls.permanent, page.url()).toString()
+    // No files domain in the browser suite, so the pinned link is the private
+    // preview route (`/preview/{publicId}/{old-slug}.v1.webp`); the slug is
+    // cosmetic, which is exactly what the rename must not break.
+    const pinnedUrl = new URL(uploaded!.urls.view, page.url()).toString()
+    expect(new URL(pinnedUrl).pathname.startsWith('/preview/')).toBe(true)
 
     const renamed = `renamed-${Date.now()}.jpg`
     await renameImageViaMenu(page, original, renamed)
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/rename-image.png`, fullPage: true })
 
     // The AC: the URL taken before the rename still serves the image bytes,
-    // with no session at all (a private window).
-    const cookieFree = await page.context().browser()!.newContext()
-    const response = await cookieFree.request.get(permanentUrl)
+    // even though its slug now names nothing.
+    const response = await page.request.get(pinnedUrl)
     expect(response.status()).toBe(200)
     expect(response.headers()['content-type']).toBe('image/webp')
     expect((await response.body()).length).toBeGreaterThan(0)
-    await cookieFree.close()
   })
 
   test('F2 renames the hovered folder inline', async ({ page }) => {

@@ -11,3 +11,8 @@ process.env.APP_KEY ??= `base64:${randomBytes(32).toString('base64')}`
 // (storage-contract.test.ts); this pins the app boot itself to the offline
 // local disk so /health's storage probe answers from the filesystem alone.
 process.env.STORAGE_DISK = 'local'
+
+// A local .env may point PUBLIC_FILES_BASE_URL at a real bucket domain (task
+// 6.3). The suite asserts the private preview URLs unless a case builds a
+// UrlBuilder with the files mode explicitly, so never inherit it from the machine.
+delete process.env.PUBLIC_FILES_BASE_URL

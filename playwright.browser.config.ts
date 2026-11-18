@@ -17,6 +17,15 @@ for (const file of ['.env.local', `.env.${mode}`, '.env']) {
   if (existsSync(file)) process.loadEnvFile(file)
 }
 
+// `browser:serve` inherits this process's environment, so pin what a local .env
+// may configure for the owner: a real S3 bucket, a dev-server origin, a public
+// files domain. Specs then write to the local disk and build every server URL
+// against this run's origin (task 6.3).
+process.env.STORAGE_DISK = 'local'
+process.env.APP_URL = ORIGIN
+// An empty value parses as "unset"; deleting it would only let .env set it again.
+process.env.PUBLIC_FILES_BASE_URL = ''
+
 // `guren browser:record --begin` names runs this way; the name becomes a path under .guren/browser/.
 const RUN_NAME = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-[a-z0-9-]+$/u
 const run = process.env.GUREN_BROWSER_RUN

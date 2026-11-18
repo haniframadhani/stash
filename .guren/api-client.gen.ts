@@ -46,18 +46,6 @@ export interface ApiRoutes {
     method: 'GET'
     path: '/'
   }
-  'image.latest': {
-    method: 'GET'
-    path: '/i/:publicId'
-  }
-  'image.show': {
-    method: 'GET'
-    path: '/i/:publicId/:file'
-  }
-  'image.thumb': {
-    method: 'GET'
-    path: '/t/:publicId/:file'
-  }
   'images.update': {
     method: 'PATCH'
     path: '/images/:id'
@@ -95,6 +83,10 @@ export interface ApiRoutes {
   'logout': {
     method: 'POST'
     path: '/logout'
+  }
+  'preview.show': {
+    method: 'GET'
+    path: '/preview/:publicId/:file'
   }
   'profile.edit': {
     method: 'GET'
@@ -339,9 +331,6 @@ const routes: Record<string, { method: string; path: string }> = {
   'folders.store': { method: 'POST', path: '/folders' },
   'folders.update': { method: 'PATCH', path: '/folders/:id' },
   'home': { method: 'GET', path: '/' },
-  'image.latest': { method: 'GET', path: '/i/:publicId' },
-  'image.show': { method: 'GET', path: '/i/:publicId/:file' },
-  'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'images.update': { method: 'PATCH', path: '/images/:id' },
   'items.delete': { method: 'POST', path: '/items/delete' },
   'items.move': { method: 'POST', path: '/items/move' },
@@ -350,6 +339,7 @@ const routes: Record<string, { method: string; path: string }> = {
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
+  'preview.show': { method: 'GET', path: '/preview/:publicId/:file' },
   'profile.edit': { method: 'GET', path: '/profile' },
   'profile.update': { method: 'PUT', path: '/profile' },
   'trash.empty': { method: 'DELETE', path: '/trash' },

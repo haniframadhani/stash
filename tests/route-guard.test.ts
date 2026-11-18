@@ -16,13 +16,9 @@ import { resetDatabase } from '../config/database.js'
  *  as this app's graph does (the spec table's `login.show` is registered as
  *  `login`, and `/health` has no name). The set is asserted both ways - a public
  *  route that disappears fails the guard, and so does a private one that quietly
- *  becomes reachable.
- *
- *  Two §1 entries are not here, and neither is a regression:
- *  - `login.store` is a POST (see PUBLIC_MUTATIONS);
- *  - `share.show` is spec'd for task 3.4 and not registered yet. Add it here
- *    when `/p/:publicId` lands. */
-const PUBLIC_ROUTES = ['image.show', 'image.latest', 'image.thumb', 'login', 'GET /health'] as const
+ *  becomes reachable. Images are served by the bucket domain, so there is no
+ *  public image route left; `login.store` is a POST (see PUBLIC_MUTATIONS). */
+const PUBLIC_ROUTES = ['login', 'GET /health'] as const
 
 /** Concrete values for the params in the graph. A value that matches no row is
  *  fine: the guard must refuse before any lookup, and a 404 is a legitimate
@@ -136,16 +132,6 @@ describe('route guard', () => {
     }
 
     expect(new Set(reachable)).toEqual(new Set(PUBLIC_ROUTES))
-  })
-
-  it('serves the image routes with no Set-Cookie', async () => {
-    // The public prefixes must not attach a session or CSRF cookie: a shared
-    // cache must be able to store the response as-is.
-    for (const route of definitionRoutes()) {
-      if (route.name !== 'image.show' && route.name !== 'image.latest' && route.name !== 'image.thumb') continue
-      const response = await send(route.method, materialize(route.path))
-      expect(response.headers.has('set-cookie'), `${label(route)} set a cookie`).toBe(false)
-    }
   })
 })
 

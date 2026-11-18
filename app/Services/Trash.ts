@@ -1,20 +1,15 @@
-/** Trash, restore and permanent delete (ROUTES_SPEC §4, PLANNING.md §6, task
- *  4.2). Trashing is a soft delete: `deleted_at` on the item only, so public
- *  URLs for trashed images answer 404 at once and nothing is lost until the
- *  owner empties the Trash.
- *
- *  - A trashed folder hides every descendant (they are not listed in Trash
- *    separately, and restoring the folder brings them back).
- *  - Restore clears `deleted_at`; a trashed or missing parent sends the item to
- *    the root and a name clash gets a ` (1)` suffix.
- *  - Permanent delete removes every version's objects first, then the rows: a
- *    storage failure must leave the rows, so nothing silently vanishes.
+/** Trash, restore and permanent delete (ROUTES_SPEC §4, PLANNING.md §6, tasks
+ *  4.2 and 6.3). Trashing is a soft delete in the database, but the bytes move
+ *  under the `trash/` key prefix at the same time: a files domain that serves
+ *  the bucket directly must stop answering the live key at once. Restoring
+ *  moves them back; permanent delete removes both locations. A trashed folder
+ *  hides its whole subtree and moves its images' objects too.
  */
 import { ValidationException } from '@guren/core'
 import { Folder, type FolderRecord } from '../Models/Folder.js'
 import { Image, type ImageRecord } from '../Models/Image.js'
 import { ImageVersion, type ImageVersionRecord } from '../Models/ImageVersion.js'
-import { ImageStore } from './ImageStore.js'
+import { ImageStore, versionKeys, type VersionRef } from './ImageStore.js'
 import { uniqueName } from './NamePolicy.js'
 import { toSlug } from './Slug.js'
 
@@ -37,14 +32,12 @@ function uniqueIds(ids: readonly number[]): number[] {
   return [...new Set(ids)]
 }
 
-/** The ids of every trashed folder: one recursive walk down the tree, so an
- *  image whose ancestor is trashed counts as hidden. Small tables make this
- *  cheaper than a CTE round trip. */
-async function trashedFolderIds(): Promise<Set<number>> {
-  const folders = await Folder.all()
+/** Every folder below `roots`, roots included (a trashed folder hides its
+ *  whole subtree). Walking up from each folder needs no children index. */
+function withDescendants(roots: Iterable<number>, folders: FolderRecord[]): Set<number> {
+  const direct = new Set(roots)
+  const hidden = new Set(direct)
   const parentOf = new Map<number, number | null>(folders.map((row) => [row.id, row.parentId]))
-  const direct = new Set(folders.filter((row) => row.deletedAt !== null).map((row) => row.id))
-  const hidden = new Set<number>(direct)
   for (const folder of folders) {
     let cursor = folder.parentId
     for (let depth = 0; cursor !== null && depth < MAX_DEPTH; depth++) {
@@ -56,6 +49,36 @@ async function trashedFolderIds(): Promise<Set<number>> {
     }
   }
   return hidden
+}
+
+/** The ids of every trashed folder: one recursive walk down the tree, so an
+ *  image whose ancestor is trashed counts as hidden. Small tables make this
+ *  cheaper than a CTE round trip. */
+async function trashedFolderIds(): Promise<Set<number>> {
+  const folders = await Folder.all()
+  return withDescendants(folders.filter((row) => row.deletedAt !== null).map((row) => row.id), folders)
+}
+
+/** Both tables and the visible-image set in one read. Visibility decides which
+ *  objects move: the bucket follows hidden → visible transitions, not the rows
+ *  this request happened to name. */
+interface VisibilitySnapshot {
+  folders: FolderRecord[]
+  images: ImageRecord[]
+  visibleImages: Set<number>
+}
+
+async function visibilitySnapshot(): Promise<VisibilitySnapshot> {
+  const [folders, images] = await Promise.all([Folder.all(), Image.all()])
+  const hidden = withDescendants(
+    folders.filter((row) => row.deletedAt !== null).map((row) => row.id),
+    folders,
+  )
+  return {
+    folders,
+    images,
+    visibleImages: new Set(images.filter((image) => isVisibleImage(image, hidden)).map((image) => image.id)),
+  }
 }
 
 /** An image is visible when it is not itself trashed and no ancestor is. */
@@ -84,25 +107,71 @@ async function resolveActive(input: TrashInput): Promise<{ images: ImageRecord[]
   return { images, folders }
 }
 
-export async function trashItems(input: TrashInput): Promise<TrashResult> {
+export async function trashItems(
+  input: TrashInput,
+  store: ImageStore = ImageStore.fromContainer(),
+): Promise<TrashResult> {
   const { images, folders } = await resolveActive(input)
+  const before = await visibilitySnapshot()
+  const doomedFolders = withDescendants(folders.map((folder) => folder.id), before.folders)
+  const requestedImages = new Set(images.map((image) => image.id))
+
+  // Every image that this request makes invisible loses its objects from the
+  // live keys: the clicked ones and everything inside a trashed folder.
+  const toHide = before.images.filter((image) =>
+    before.visibleImages.has(image.id) &&
+    (requestedImages.has(image.id) || (image.folderId !== null && doomedFolders.has(image.folderId))),
+  )
+
+  const hidden: string[][] = []
+  try {
+    for (const image of toHide) {
+      const refs = await versionRefsFor(image.id)
+      hidden.push(await store.hideVersions(refs, image.publicId))
+    }
+  }
+  catch (error) {
+    // Objects moved, rows not yet: put them back so the image stays usable.
+    await undoObjectMoves(store, hidden)
+    throw error
+  }
+
   const deletedAt = new Date().toISOString()
   // Both loops run in one transaction: the Trash either gains the whole batch
   // or none of it. `forceUpdate` is the query builder's trusted-server-data
   // path (the ORM types `deleted_at` out of the create payload), and the
   // builder joins the open transaction on its own.
-  await Image.transaction(async () => {
-    for (const image of images) {
-      await Image.where({ id: image.id }).forceUpdate({ deletedAt })
-    }
-    for (const folder of folders) {
-      await Folder.where({ id: folder.id }).forceUpdate({ deletedAt })
-    }
-  })
+  try {
+    await Image.transaction(async () => {
+      for (const image of images) {
+        await Image.where({ id: image.id }).forceUpdate({ deletedAt })
+      }
+      for (const folder of folders) {
+        await Folder.where({ id: folder.id }).forceUpdate({ deletedAt })
+      }
+    })
+  }
+  catch (error) {
+    await undoObjectMoves(store, hidden)
+    throw error
+  }
   return { trashed: images.length + folders.length, restored: 0 }
 }
 
-export async function restoreItems(input: TrashInput): Promise<TrashResult> {
+/** Reverse the object half of a trash whose row write failed. */
+async function undoObjectMoves(store: ImageStore, hidden: string[][]): Promise<void> {
+  for (const keys of [...hidden].reverse()) await store.restoreVersions(keys)
+}
+
+async function versionRefsFor(imageId: number): Promise<VersionRef[]> {
+  const versions = await ImageVersion.where({ imageId }).get()
+  return versions.map(toVersionRef)
+}
+
+export async function restoreItems(
+  input: TrashInput,
+  store: ImageStore = ImageStore.fromContainer(),
+): Promise<TrashResult> {
   const imageIds = uniqueIds(input.imageIds)
   const folderIds = uniqueIds(input.folderIds)
   if (imageIds.length + folderIds.length === 0) {
@@ -115,6 +184,7 @@ export async function restoreItems(input: TrashInput): Promise<TrashResult> {
     throw ValidationException.withMessages({ items: ['Only items in the Trash can be restored.'] })
   }
 
+  const before = await visibilitySnapshot()
   let restored = 0
   await Image.transaction(async () => {
     for (const image of images) {
@@ -130,6 +200,27 @@ export async function restoreItems(input: TrashInput): Promise<TrashResult> {
       restored++
     }
   })
+
+  // Whatever became visible again gets its objects back at the live keys. This
+  // runs after the rows so the pass sees the final folder tree (a restored
+  // folder may bring descendants that this request never named).
+  const after = await visibilitySnapshot()
+  const toShow = after.images.filter((image) =>
+    after.visibleImages.has(image.id) && !before.visibleImages.has(image.id),
+  )
+  for (const image of toShow) {
+    const refs = await versionRefsFor(image.id)
+    try {
+      await store.restoreVersions(refs.flatMap((ref) => versionKeys(image.publicId, ref)))
+    }
+    catch (error) {
+      // Keep the image hidden so a retry can finish: re-hide a half-restored
+      // version set and put the row back in the Trash.
+      await store.hideVersions(refs, image.publicId).catch(() => undefined)
+      await Image.where({ id: image.id }).forceUpdate({ deletedAt: new Date().toISOString() })
+      throw error
+    }
+  }
   return { trashed: 0, restored }
 }
 

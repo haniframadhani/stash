@@ -58,8 +58,8 @@ await ImageVersion.create({
 }, { set: { imageId: image.id, version: 1 } })
 
 const env = app.container.make<AppEnv>('env')
-const urls = new UrlBuilder(env.PUBLIC_BASE_URL ?? env.APP_URL)
+const urls = UrlBuilder.fromEnv(env)
 console.log(`Stored image ${image.id} (${converted.originalSize} B → ${converted.storedSize} B):`)
-console.log(`  permanent: ${urls.permanent({ publicId, slug, version: 1, ext: converted.ext })}`)
-console.log(`  latest:    ${urls.latest(publicId)}`)
+console.log(`  permanent: ${urls.permanent({ publicId, slug, version: 1, ext: converted.ext }) ?? '(set PUBLIC_FILES_BASE_URL)'}`)
+console.log(`  view:      ${urls.view(publicId, slug, 1, converted.ext)}`)
 console.log(`  thumb:     ${urls.thumb(publicId, slug, 1)}`)

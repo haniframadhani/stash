@@ -59,7 +59,14 @@ export interface ImageItem {
   deletedAt: number | null
   /** Absent until the versions payload lands (task 3.2); the lightbox info panel hides the section then. */
   versions?: ImageVersionSummary[]
-  urls: { thumb: string, permanent: string, latest: string, page: string }
+  urls: {
+    /** Grid/list src: the files-domain thumbnail, or the private preview route. */
+    thumb: string
+    /** Lightbox src: the files-domain object, or the private preview route. */
+    view: string
+    /** Copyable pinned link; null until PUBLIC_FILES_BASE_URL is set. */
+    permanent: string | null
+  }
 }
 
 /** One folder card as the server sends it (ROUTES_SPEC §3 FolderItem; built by
@@ -84,7 +91,8 @@ export interface SharedProps {
   auth: { user: StashUser | null }
   capabilities: StashCapabilities
   storage: StashStorage
-  publicBaseUrl: string
+  /** Public bucket domain; null means sharing is off (no link can outlive the app). */
+  filesBaseUrl: string | null
   flash: StashFlash
 }
 

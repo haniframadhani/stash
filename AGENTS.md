@@ -255,18 +255,18 @@ docker ps --filter "name=seaweed"       # catches a container started outside th
 ## Authorization rules (critical)
 
 - **Every** `POST`, `PUT`, `PATCH`, `DELETE`, and every private page is registered inside the `auth` middleware group (`requireAuthenticated`).
-- The **only** public routes are: `GET /i/*`, `GET /t/*`, `GET /p/:publicId`, `GET /health`, and the login routes. Adding a public route requires updating `PLANNING.md` §9 and `docs/ROUTES_SPEC.md`.
+- The **only** public routes are: `GET /health` and the login routes. The app is local and never internet-facing; it serves no public image route (`/i`, `/t`, `/p` are gone). Adding a public route requires updating `PLANNING.md` §9 and `docs/ROUTES_SPEC.md`.
 - Keep the **route-guard test** (`tests/route-guard.test.ts`) green: it enumerates all registered non-GET routes and asserts that an unauthenticated request does not succeed (401/302/403, never 2xx). Add new routes to that sweep automatically; do not hand-maintain a list unless the graph is unavailable.
 - Use `this.auth.userOrFail()` in mutating actions as defense in depth.
 - Use `this.validateBody()` / `validateParams()` / `validateQuery()` with zod on every input. `guren audit` must stay clean.
 
-## Public image routes (critical)
+## Public image delivery (critical)
 
-- Responses carry **no `Set-Cookie`**. Verify (the session and CSRF middleware may attach cookies to GETs), and mount or configure the routes so they don't. A test asserts it.
-- Exact headers and URL rules are in `docs/IMAGE_PIPELINE.md` §5 to §6. Always send `X-Content-Type-Options: nosniff`.
-- Do the DB lookup and the `If-None-Match` check **before** reading storage, so `304` never touches S3.
-- Trashed or missing images and versions return `404`.
-- Never derive a storage key from user input. Keys come only from DB rows (`storage_key`).
+- Images are served by the **bucket's public files domain** (`PUBLIC_FILES_BASE_URL`), never by this app. A copied link is `{files base}/images/{publicId}/v{n}.{ext}`; it must open with the app (and the machine) off.
+- App code only builds URLs in `UrlBuilder`; keys only in `ImageStore`. Never derive a storage key from user input, and never hand out an app route as a shareable link.
+- `/preview/:publicId/:file` is the private fallback for the local UI (local disk dev or no files domain). It stays behind `requireAuthenticated`, sends `Cache-Control: private, …`, and returns `404` for trashed or missing images and versions.
+- Trashing must hide bytes at the bucket too: move every version's objects under `trash/` (the files domain blocks that prefix) and restore must move them back. Never leave an image half-hidden.
+- Headers, keys and the Cloudflare rules are in `docs/IMAGE_PIPELINE.md` §4 to §6. Always send `X-Content-Type-Options: nosniff`.
 
 ## Versioning rules (critical)
 
@@ -305,8 +305,8 @@ docker ps --filter "name=seaweed"       # catches a container started outside th
 ## Security checklist
 
 - Sanitize file names (strip path separators and control characters). Slugs are `[a-z0-9-]` only.
-- Do not serve user content as HTML or SVG. Pinned and latest routes only serve the stored `avif`, `webp`, `jpeg`, `png`, `gif` MIME types.
-- Public routes: rate-limit with Guren's rate limiter (task 5.2). Login is already throttled.
+- Do not serve user content as HTML or SVG. The private preview route only serves the stored `avif`, `webp`, `jpeg`, `png`, `gif` MIME types; the public files domain serves the bucket objects, written with those MIME types only.
+- Public surface: the bucket's `images/*` prefix (unguessable keys, no listing) and the login throttle on the app. Do not expose the app itself.
 - Never log credentials, `APP_KEY`, or storage secrets. Never commit `.env`.
 - `ADMIN_PASSWORD` is used only by the seeder; store only the hash.
 
@@ -316,7 +316,7 @@ docker ps --filter "name=seaweed"       # catches a container started outside th
 
 - Use the **memory** storage driver in unit tests; the contract test also runs against the real endpoint when `RUN_S3_TESTS=1`.
 - Generate fixture images in tests with `sharp` (no binary fixtures committed).
-- Must-have tests: converter (formats, resize, metadata stripped, animated GIF), versioning (replace, prune, pinned stays valid), public routes (headers, 304, 404, no cookie), route guard, folder cycle rejection, trash/restore/purge (objects deleted), storage contract.
+- Must-have tests: converter (formats, resize, metadata stripped, animated GIF), versioning (replace, prune, pinned stays valid), private preview (auth, headers, 404s), URL building in both modes (files domain and preview fallback), route guard, folder cycle rejection, trash/restore/purge (objects deleted), storage contract.
 - Add or update tests in the same change as the feature.
 
 ## Git

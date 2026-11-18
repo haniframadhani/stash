@@ -1,8 +1,10 @@
 // Hand-written spec for task 4.2 (Trash), the task's Manual check: trash an
-// image → its public link 404s → Restore from the Trash page → the link works
-// again → Delete forever → gone. Also covers the "Empty trash" flow and folder
-// trashing hiding its contents. `guren browser:map` rewrites generated/, never
-// this.
+// image → its pinned preview URL 404s → Restore from the Trash page → the URL
+// works again → Delete forever → gone. Also covers the "Empty trash" flow and
+// folder trashing hiding its contents. With a files domain, 6.3 moves the
+// bucket objects too; that half is covered by tests/Trash.test.ts and the
+// manual R2 check, since the suite has no bucket. `guren browser:map` rewrites
+// generated/, never this.
 import { expect, test, type Page } from '@playwright/test'
 import sharp from 'sharp'
 import { AUTH_FILE, reviewAndUpload, type BrowserFile } from './support'
@@ -26,22 +28,29 @@ function imageCard(page: Page, name: string) {
   return page.locator('main li').filter({ has: page.locator(`img[alt="${name}"]`) })
 }
 
-/** Uploads one image and returns its permanent URL, taken from the POST answer. */
+/** Uploads one image and returns its pinned preview URL, taken from the POST answer. */
 async function uploadAndGetUrl(page: Page, name: string): Promise<string> {
-  let permanent = ''
+  let view = ''
   page.on('response', async (response) => {
     if (response.request().method() !== 'POST' || !response.url().endsWith('/uploads') || response.status() !== 201) return
-    const body = await response.json() as { image: { urls: { permanent: string } } }
-    permanent = body.image.urls.permanent
+    const body = await response.json() as { image: { urls: { view: string } } }
+    view = body.image.urls.view
   })
   const file: BrowserFile = { name, mimeType: 'image/jpeg', buffer: await jpegBytes() }
   await page.goto('/files')
   await reviewAndUpload(page, [file])
   await expect(page.locator(`img[alt="${name}"]`)).toBeVisible({ timeout: 30_000 })
-  return new URL(permanent, page.url()).toString()
+  return new URL(view, page.url()).toString()
 }
 
+/** The status a request for a URL gets. The subject is either the private
+ *  preview (needs the owner's session, as the grid does) or a bucket URL,
+ *  which must answer with no session at all. */
 async function publicStatus(page: Page, url: string): Promise<number> {
+  if (new URL(url).pathname.startsWith('/preview/')) {
+    const response = await page.request.get(url)
+    return response.status()
+  }
   const cookieFree = await page.context().browser()!.newContext()
   const response = await cookieFree.request.get(url)
   await cookieFree.close()

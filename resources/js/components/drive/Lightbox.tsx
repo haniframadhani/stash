@@ -114,7 +114,7 @@ export function Lightbox(props: Props) {
       <div className="relative z-10 flex flex-1 items-center justify-center overflow-hidden p-4 pt-16 pb-16">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={image.urls.latest}
+          src={image.urls.view}
           alt={image.name}
           className="max-h-full max-w-full object-contain"
           draggable={false}

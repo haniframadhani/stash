@@ -10,9 +10,6 @@ export const routeManifest = {
   'folders.store': { method: 'POST', path: '/folders' },
   'folders.update': { method: 'PATCH', path: '/folders/:id' },
   'home': { method: 'GET', path: '/' },
-  'image.latest': { method: 'GET', path: '/i/:publicId' },
-  'image.show': { method: 'GET', path: '/i/:publicId/:file' },
-  'image.thumb': { method: 'GET', path: '/t/:publicId/:file' },
   'images.update': { method: 'PATCH', path: '/images/:id' },
   'items.delete': { method: 'POST', path: '/items/delete' },
   'items.move': { method: 'POST', path: '/items/move' },
@@ -21,6 +18,7 @@ export const routeManifest = {
   'login': { method: 'GET', path: '/login' },
   'login.store': { method: 'POST', path: '/login' },
   'logout': { method: 'POST', path: '/logout' },
+  'preview.show': { method: 'GET', path: '/preview/:publicId/:file' },
   'profile.edit': { method: 'GET', path: '/profile' },
   'profile.update': { method: 'PUT', path: '/profile' },
   'trash.empty': { method: 'DELETE', path: '/trash' },
@@ -85,11 +83,6 @@ export const routes = {
     update: (params: RouteParams<'folders.update'>, query?: RouteQuery) => route('folders.update', params, query)
   },
   home: (query?: RouteQuery) => route('home', query),
-  image: {
-    latest: (params: RouteParams<'image.latest'>, query?: RouteQuery) => route('image.latest', params, query),
-    show: (params: RouteParams<'image.show'>, query?: RouteQuery) => route('image.show', params, query),
-    thumb: (params: RouteParams<'image.thumb'>, query?: RouteQuery) => route('image.thumb', params, query)
-  },
   images: {
     update: (params: RouteParams<'images.update'>, query?: RouteQuery) => route('images.update', params, query)
   },
@@ -106,6 +99,9 @@ export const routes = {
   }
   ),
   logout: (query?: RouteQuery) => route('logout', query),
+  preview: {
+    show: (params: RouteParams<'preview.show'>, query?: RouteQuery) => route('preview.show', params, query)
+  },
   profile: {
     edit: (query?: RouteQuery) => route('profile.edit', query),
     update: (query?: RouteQuery) => route('profile.update', query)
