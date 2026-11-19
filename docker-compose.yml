@@ -6,8 +6,10 @@
 # Development lives in docker-compose.dev.yml, which bundles SeaweedFS.
 # Secrets stay in .env (git-ignored), never in this file.
 services:
-  # Schema and the owner account, once per `up`; `app` waits for it to exit 0.
-  app-migrate:
+  # First-time setup only: schema + owner account.
+  #   docker compose --profile setup run --rm app-setup
+  app-setup:
+    profiles: ["setup"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -15,10 +17,24 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3333
-      DATABASE_URL: ./data/stash.db
     volumes:
-      - stash-data:/app/data
-    command: ['sh', '-c', 'bunx guren db:migrate && bunx guren db:seed --force']
+      - ./data:/app/data
+    command: ["sh", "-c", "bunx guren db:migrate && bunx guren db:seed --force"]
+
+  # Schema changes only (no seeding). Run before restarting `app` after a deploy.
+  #   docker compose --profile migrate run --rm app-migrate
+  app-migrate:
+    profiles: ["migrate"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      PORT: 3333
+    volumes:
+      - ./data:/app/data
+    command: ["sh", "-c", "bunx guren db:migrate"]
 
   app:
     build:
@@ -28,26 +44,27 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3333
-      DATABASE_URL: ./data/stash.db
-    depends_on:
-      app-migrate:
-        condition: service_completed_successfully
     ports:
       # Host port only. Change it with APP_PORT (e.g. APP_PORT=3335) when the
       # dev server already holds 3333; the container always listens on 3333.
-      - '${APP_PORT:-3333}:3333'
+      - "${APP_PORT:-3333}:3333"
     volumes:
-      - stash-data:/app/data
+      - ./data:/app/data
       # Only used when STORAGE_DISK=local; harmless with s3.
       - stash-storage:/app/storage/app
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'bun', '-e', "fetch('http://127.0.0.1:3333/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://127.0.0.1:3333/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
 
 volumes:
-  stash-data:
   stash-storage:

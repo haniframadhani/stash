@@ -20,16 +20,22 @@ Sign in with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` you seeded. `bun run db:make` 
 Docker:
 
 ```bash
-docker compose up -d --build                    # http://<host>:${APP_PORT:-3333}
+# first run: schema + owner account, then build and start
+docker compose --profile setup run --rm app-setup   # db:migrate && db:seed --force
+docker compose up -d --build                          # http://<host>:${APP_PORT:-3333}
+
+# redeploy with a schema change (stop the app first, then migrate)
+docker compose --profile migrate run --rm app-migrate
+docker compose up -d --build
 ```
 
-`docker-compose.yml` reads `.env`, runs `db:migrate && db:seed --force` once, keeps SQLite in the `stash-data` volume, and holds **no S3 service**. Development with a bundled SeaweedFS is a separate stack:
+`docker-compose.yml` (production) reads `.env`, runs `db:migrate && db:seed --force` once via the `setup` profile, and holds **no S3 service**. Database lives in the `./data` bind mount. Development with a bundled SeaweedFS is a separate stack:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d --build   # app on :3334, SeaweedFS on :8333
 ```
 
-Its data is bind-mounted (`./data`, `./storage/app`, `./volumes/seaweedfs`), so it survives `down` and is visible on the host.
+Its data is bind-mounted (`./data`, `./volumes/seaweedfs`), so it survives `down` and is visible on the host.
 
 ## Environment reference
 
@@ -110,7 +116,7 @@ Two things hold all state; back up both or a restore is useless.
 
 | What | Where | Contains |
 |---|---|---|
-| SQLite | `data/stash.db` (`DATABASE_URL`) — `stash-data` volume in production compose | Images, folders, versions, sessions, users |
+| SQLite | `data/stash.db` (`DATABASE_URL`) — bind-mounted `./data` in production compose | Images, folders, versions, sessions, users |
 | Image bytes | the bucket (`S3_BUCKET`), or `./storage/app` when `STORAGE_DISK=local` — `stash-storage` volume in compose | Every version and thumbnail object, live and under `trash/` |
 
 **SQLite**, consistent without stopping the app:
@@ -119,7 +125,7 @@ Two things hold all state; back up both or a restore is useless.
 sqlite3 data/stash.db ".backup '/backups/stash-$(date +%F).db'"   # online backup, safe under WAL
 ```
 
-Or reach the file inside the named volume: `docker compose run --rm -v "$PWD/backups:/out" app cp /app/data/stash.db /out/`.
+Or reach the file inside the running container: `docker compose run --rm -v "$PWD/backups:/out" app cp /app/data/stash.db /out/`.
 
 **Bucket**, mirror the whole prefix including `trash/`:
 
@@ -129,7 +135,7 @@ rclone sync r2:my-bucket ./backups/bucket --fast-list
 tar czf ./backups/storage-app-$(date +%F).tgz storage/app
 ```
 
-Restore: stop the app, put the `.db` file back at `DATABASE_URL`, sync the objects back to the same bucket (or the same `storage/app`), then start. Keys are stable, so a database and bucket from the same night line up; restore a database older than the objects and the extra objects are simply unreferenced (`images:reconcile` reports them).
+Restore: stop the app, put the `.db` file back at `DATABASE_URL`, sync the objects back to the same bucket (or the same `storage/app`), then start. Keys are stable, so a database and bucket from the same night line up; restore a database older than the objects and the extra objects are simply unreferenced (the planned `images:reconcile` reports them).
 
 ## Scripts
 
