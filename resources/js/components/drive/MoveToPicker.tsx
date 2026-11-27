@@ -31,16 +31,19 @@ export default function MoveToPicker({
     () => folderOptions(folders, new Set([...excluded, ...(currentFolderId === null ? [] : [currentFolderId])])),
     [folders, excluded, currentFolderId],
   )
-  const [value, setValue] = useState<number | null>(null)
+  const [value, setValue] = useState('')
   const inputRef = useRef<HTMLSelectElement>(null)
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
 
+  // The select's own value: '' is "nothing chosen", 'root' is My Files, a
+  // number string is a folder. Keeping them distinct is what lets the root be
+  // a real destination (task 6.5).
   const submit = () => {
-    if (value === null) return
-    onConfirm(value)
+    if (value === '') return
+    onConfirm(value === 'root' ? null : Number(value))
   }
 
   return (
@@ -61,13 +64,20 @@ export default function MoveToPicker({
         </label>
         <select
           ref={inputRef}
-          value={value === null ? '' : String(value)}
-          onChange={(event) => setValue(event.target.value === '' ? null : Number(event.target.value))}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
           disabled={busy}
           className="mt-1 w-full rounded-g-ctl border border-g-line bg-g-page px-3 py-2 text-sm text-g-heading focus:outline-none focus:ring-2 focus:ring-g-accent disabled:opacity-50"
         >
+          <option value="" disabled hidden>
+            Choose a destination
+          </option>
           {options.map((option) => (
-            <option key={option.id === null ? 'root' : String(option.id)} value={option.id === null ? '' : String(option.id)} disabled={option.disabled}>
+            <option
+              key={option.id === null ? 'root' : String(option.id)}
+              value={option.id === null ? 'root' : String(option.id)}
+              disabled={option.disabled}
+            >
               {'\u00A0'.repeat(option.depth * 2)}{option.name}
             </option>
           ))}
@@ -84,7 +94,7 @@ export default function MoveToPicker({
           <button
             type="button"
             onClick={submit}
-            disabled={busy || value === null}
+            disabled={busy || value === ''}
             className="rounded-g-ctl bg-g-accent px-3 py-2 text-sm font-bold text-g-on-accent transition hover:opacity-95 disabled:opacity-50"
           >
             Move

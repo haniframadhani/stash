@@ -136,6 +136,46 @@ test.describe('move', () => {
     await expect(page.getByText(/Moved \d+ items?/u)).toBeHidden()
   })
 
+  test('the picker moves items out of a folder back to My Files', async ({ page }) => {
+    const folderName = unique('Move out')
+    await page.goto('/files')
+    await createFolder(page, folderName)
+    await folderCard(page, folderName).click()
+    await expect(page).toHaveURL(/\/files\/\d+$/u)
+
+    const names = [unique('out-a', '.jpg'), unique('out-b', '.jpg')]
+    await reviewAndUpload(page, [
+      { name: names[0]!, mimeType: 'image/jpeg', buffer: await jpegBytes('#f43f5e') },
+      { name: names[1]!, mimeType: 'image/jpeg', buffer: await jpegBytes('#0d9488') },
+    ])
+    for (const name of names) {
+      await expect(imageCard(page, name)).toBeVisible({ timeout: 30_000 })
+    }
+
+    await imageCard(page, names[0]!).click()
+    await imageCard(page, names[1]!).click({ modifiers: ['ControlOrMeta'] })
+    await expect(selectionBar(page)).toContainText('2 selected')
+    await selectionBar(page).getByRole('button', { name: 'Move selected items', exact: true }).click()
+
+    const dialog = page.getByRole('dialog', { name: 'Move items' })
+    await dialog.locator('select').selectOption({ label: 'My Files' })
+    // The root is a real destination, not just the "nothing chosen" state.
+    await expect(dialog.getByRole('button', { name: 'Move', exact: true })).toBeEnabled()
+    await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+
+    await expect(page.getByText('Moved 2 items')).toBeVisible({ timeout: 15_000 })
+    for (const name of names) {
+      await expect(imageCard(page, name)).toHaveCount(0)
+    }
+
+    // Back at the root both images are there, out of the folder.
+    await page.getByRole('navigation', { name: 'Folder path' }).getByText('My Files').click()
+    await expect(page).toHaveURL(/\/files$/u)
+    for (const name of names) {
+      await expect(imageCard(page, name)).toBeVisible({ timeout: 15_000 })
+    }
+  })
+
   test('the hide is optimistic: a held request shows the card gone first', async ({ page }) => {
     const folderName = unique('Move held')
     await page.goto('/files')
