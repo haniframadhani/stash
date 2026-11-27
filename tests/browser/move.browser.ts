@@ -100,6 +100,42 @@ test.describe('move', () => {
     await expect(imageCard(page, fileName)).toBeVisible({ timeout: 15_000 })
   })
 
+  test('an internal drag never opens the upload overlay', async ({ page }) => {
+    const folderName = unique('Move quiet')
+    await page.goto('/files')
+    await createFolder(page, folderName)
+
+    const fileName = unique('quiet-drag', '.jpg')
+    await reviewAndUpload(page, [
+      { name: fileName, mimeType: 'image/jpeg', buffer: await jpegBytes('#0ea5e9') },
+    ])
+    const card = imageCard(page, fileName)
+    await expect(card).toBeVisible({ timeout: 30_000 })
+
+    // What Chromium sends for an in-drive card drag: our own type from
+    // `startDrag`, plus `Files` because the source is an <img>. Neither the
+    // window overlay nor the Review dialog may answer it (task 6.1).
+    const types = await page.evaluate((source) => {
+      const transfer = new DataTransfer()
+      transfer.items.add(new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'drag.png', { type: 'image/png' }))
+      const init = { bubbles: true, cancelable: true, dataTransfer: transfer }
+      source.dispatchEvent(new DragEvent('dragstart', init))
+      document.body.dispatchEvent(new DragEvent('dragenter', init))
+      document.body.dispatchEvent(new DragEvent('dragover', init))
+      document.body.dispatchEvent(new DragEvent('drop', init))
+      source.dispatchEvent(new DragEvent('dragend', init))
+      return Array.from(transfer.types)
+    }, await card.elementHandle().then((handle) => handle!))
+
+    expect(types).toContain('Files')
+    expect(types).toContain('application/x-stash-items')
+    await expect(page.getByText(/Drop images to upload/u)).toBeHidden()
+    await expect(page.getByRole('dialog')).toBeHidden()
+    // The drop on empty page background did nothing, and the card is still here.
+    await expect(card).toBeVisible()
+    await expect(page.getByText(/Moved \d+ items?/u)).toBeHidden()
+  })
+
   test('the hide is optimistic: a held request shows the card gone first', async ({ page }) => {
     const folderName = unique('Move held')
     await page.goto('/files')
