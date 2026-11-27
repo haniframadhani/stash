@@ -85,7 +85,7 @@ Opens when files are dropped, pasted, or chosen. **Nothing is uploaded until Con
 
 **FolderCard:** a 56px pill (icon, name, ⋮). Click or Enter opens. A drag source (the folder moves) and a drop target (a dragged selection moves into it); highlights while a drag is over it.
 
-**Move to… picker:** a small centered dialog listing every active folder as a depth-indented `<select>`, `My Files` (root) first. Moving a folder disables itself and its descendants; the current folder is disabled (a no-op). Confirm posts `items.move`; Cancel or a backdrop click closes without a request.
+**Move to… picker:** a small centered dialog listing every active folder as a depth-indented `<select>`, starting on "Choose a destination" with `My Files` (root) first and selectable from inside any folder (task 6.5). Moving a folder disables itself and its descendants; the current folder is disabled (a no-op). Confirm posts `items.move`; Cancel or a backdrop click closes without a request.
 
 **ImageCard (grid):** `aspect-[4/3]` thumbnail (`object-cover`, explicit width/height from the DB to avoid layout shift), file name below, a small format badge (`AVIF` / `WEBP`), star badge if starred. Checkbox top-left on hover or when selected. ⋮ top-right. Thumbnails use `urls.thumb` (the bucket thumb, or the private preview route when sharing is off).
 

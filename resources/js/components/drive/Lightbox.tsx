@@ -68,7 +68,7 @@ export function Lightbox(props: Props) {
         </button>
       )}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center gap-3 p-3 pr-6">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center gap-3 p-3 pr-6">
         <div className="pointer-events-auto min-w-0 flex-1 truncate rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground">
           {image.name}
         </div>
@@ -122,7 +122,7 @@ export function Lightbox(props: Props) {
       </div>
 
       {infoOpen && (
-        <aside className="absolute inset-y-0 right-0 z-20 w-80 overflow-y-auto border-l border-border bg-card p-4 text-sm text-foreground">
+        <aside className="absolute inset-y-0 right-0 z-20 w-80 overflow-y-auto border-l border-border bg-card px-4 pb-4 pt-16 text-sm text-foreground">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Info</h2>
           <dl className="space-y-2">
             <div className="flex justify-between gap-3">

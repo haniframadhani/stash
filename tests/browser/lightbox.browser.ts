@@ -96,4 +96,80 @@ test.describe('context menu and lightbox', () => {
     await expect(page.getByRole('dialog', { name: /Lightbox/ })).toHaveCount(0)
     await expect(page).not.toHaveURL(/[?&]image=/u)
   })
+
+  // Task 6.2: the info panel keeps the lightbox and the page responsive.
+  test('the info panel leaves the lightbox and the page responsive', async ({ page }) => {
+    const folderName = `Info ${Date.now()}`
+    await page.goto('/files')
+    await createFolder(page, folderName)
+    await page.getByRole('link', { name: folderName }).first().click()
+
+    const names = ['info-a', 'info-b', 'info-c'].map((prefix) => unique(prefix, '.jpg'))
+    const files: BrowserFile[] = await Promise.all(
+      names.map(async (name, index) => ({
+        name,
+        mimeType: 'image/jpeg',
+        buffer: await jpegBytes(['#f97316', '#06b6d4', '#a855f7'][index]!),
+      })),
+    )
+    await reviewAndUpload(page, files)
+    for (const name of names) {
+      await expect(page.locator(`img[alt="${name}"]`)).toBeVisible({ timeout: 30_000 })
+    }
+
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+
+    // A blocked main thread makes this hang; a swallowed click leaves the
+    // panel open. Both are the freeze the bug reports (6.2).
+    const responsive = async (label: string) => {
+      const started = Date.now()
+      await page.waitForFunction(() => true, null, { timeout: 5_000 })
+      expect(Date.now() - started, `main thread blocked at ${label}`).toBeLessThan(1_000)
+    }
+
+    await page.locator('main li').filter({ has: page.locator(`img[alt="${names[0]}"]`) }).dblclick()
+    const lightbox = page.getByRole('dialog', { name: /Lightbox: / })
+    await expect(lightbox).toBeVisible()
+
+    await lightbox.getByRole('button', { name: 'Show info' }).click()
+    await expect(lightbox.getByText('Dimensions')).toBeVisible()
+    await responsive('info opened')
+
+    // Arrows keep working with Info open, across the whole folder.
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('dialog', { name: `Lightbox: ${names[1]}` })).toBeVisible()
+    await page.keyboard.press('ArrowLeft')
+    await expect(page.getByRole('dialog', { name: `Lightbox: ${names[0]}` })).toBeVisible()
+    await responsive('navigated with info open')
+
+    // The last image has no next; the panel still closes.
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('dialog', { name: `Lightbox: ${names[2]}` })).toBeVisible()
+    await lightbox.getByRole('button', { name: 'Hide info' }).click()
+    await expect(lightbox.getByText('Dimensions')).toHaveCount(0)
+
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: /Lightbox/ })).toHaveCount(0)
+
+    // The drive takes clicks again.
+    await page.locator('main li').filter({ has: page.locator(`img[alt="${names[1]}"]`) }).dblclick()
+    await expect(page.getByRole('dialog', { name: `Lightbox: ${names[1]}` })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: /Lightbox/ })).toHaveCount(0)
+
+    // List view: the same panel and keys.
+    await page.getByRole('button', { name: 'List view' }).click()
+    await page.locator('main tr').filter({ hasText: names[0] }).dblclick()
+    await expect(page.getByRole('dialog', { name: `Lightbox: ${names[0]}` })).toBeVisible()
+    await page.getByRole('button', { name: 'Show info' }).click()
+    await expect(lightbox.getByText('Dimensions', { exact: true })).toBeVisible()
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('dialog', { name: `Lightbox: ${names[1]}` })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: /Lightbox/ })).toHaveCount(0)
+    await responsive('list view afterwards')
+    expect(errors).toEqual([])
+  })
 })

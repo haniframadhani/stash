@@ -34,7 +34,11 @@ import {
   setOnUploaded,
   useUploadQueue,
 } from "./drive/queueStore.js";
-import { isItemDrag, requestMoveToRoot } from "../lib/itemDrag.js";
+import {
+  isExternalFileDrag,
+  isItemDrag,
+  requestMoveToRoot,
+} from "../lib/itemDrag.js";
 
 const NAV_ITEMS = [
   { href: "/files", label: "My Files", icon: Files },
@@ -261,7 +265,7 @@ export default function Layout({ children }: PropsWithChildren) {
   // depth counter survives the enter/leave churn of child elements.
   useEffect(() => {
     const isFileDrag = (event: DragEvent) =>
-      Array.from(event.dataTransfer?.types ?? []).includes("Files");
+      isExternalFileDrag(Array.from(event.dataTransfer?.types ?? []));
     const onDragEnter = (event: DragEvent) => {
       if (!isFileDrag(event)) return;
       dragDepth.current += 1;

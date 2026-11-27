@@ -486,7 +486,9 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
         <MoveToPicker
           folders={moveTargets}
           currentFolderId={folder?.id ?? null}
-          excluded={new Set<number>([...picker.imageIds, ...picker.folderIds])}
+          // Only folder ids: image ids share the same number space, and a
+          // mixed set disabled unrelated folders whenever the ids collided.
+          excluded={new Set<number>(picker.folderIds)}
           title="Move items"
           busy={false}
           onCancel={() => setPicker(null)}

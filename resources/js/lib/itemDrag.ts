@@ -51,6 +51,14 @@ export function isItemDrag(dataTransfer: DataTransfer | null): boolean {
   return Array.from(dataTransfer.types ?? []).includes(TYPE)
 }
 
+/** True only for a drag that came from outside the browser (OS files).
+ *  Dragging an in-drive thumbnail can make the browser add `Files` too, so the
+ *  presence of `Files` alone is not enough: our own type always wins (task 6.1).
+ */
+export function isExternalFileDrag(types: readonly string[]): boolean {
+  return types.includes('Files') && !types.includes(TYPE)
+}
+
 /** The sidebar's "My Files" drop maps onto a root move. The move state lives in
  *  the drive page (the selection), so the event is the bridge: the sidebar
  *  dispatches it, the drive page answers. */
