@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Download, Info, Share2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Download, ExternalLink, Info, Share2, X } from "lucide-react";
 import type { ImageItem, ImageVersionSummary } from "../../types";
 import { formatBytes } from "../../lib/format";
+import { showToast } from "../../lib/toastStore";
 
 type Props = {
   image: ImageItem;
@@ -15,6 +16,8 @@ type Props = {
   onDownload: (image: ImageItem) => void;
   /** Task 3.3: opens the Share dialog for the current image. */
   onShare?: () => void;
+  /** Task 3.2: moves `current_version` back to an existing version. */
+  onRestoreVersion?: (version: number) => void;
 };
 
 function formatDate(epochMs: number) {
@@ -165,19 +168,62 @@ export function Lightbox(props: Props) {
                   {versions.map((version) => (
                     <li
                       key={version.version}
-                      className={`flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 ${version.version === image.version ? "border-primary/40 bg-primary/5" : "border-border"}`}
+                      className={`rounded-md border px-2 py-1.5 ${version.isCurrent ? "border-primary/40 bg-primary/5" : "border-border"}`}
                     >
-                      <span className="font-medium">v{version.version}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {version.format.toUpperCase()} · {formatBytes(version.size)}
-                      </span>
-                      {version.version === image.version && (
-                        <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">Current</span>
-                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">v{version.version}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {version.format.toUpperCase()} · {formatBytes(version.size)}
+                        </span>
+                        {version.isCurrent && (
+                          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">Current</span>
+                        )}
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        <a
+                          href={version.view}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Open v${version.version}`}
+                          className="flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Open
+                        </a>
+                        {version.permanent && (
+                          <button
+                            type="button"
+                            aria-label={`Copy link to v${version.version}`}
+                            onClick={() => {
+                              void navigator.clipboard.writeText(version.permanent!).then(
+                                () => showToast("success", "Link copied"),
+                                () => showToast("error", "Could not copy to the clipboard."),
+                              );
+                            }}
+                            className="flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+                          >
+                            <Copy className="h-3 w-3" />
+                            Copy link
+                          </button>
+                        )}
+                        {!version.isCurrent && props.onRestoreVersion && (
+                          <button
+                            type="button"
+                            aria-label={`Make v${version.version} current`}
+                            onClick={() => props.onRestoreVersion?.(version.version)}
+                            className="rounded-md border border-border px-1.5 py-0.5 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary"
+                          >
+                            Make current
+                          </button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Older versions are kept up to the server&rsquo;s version limit.
+              </p>
             </section>
           )}
         </aside>

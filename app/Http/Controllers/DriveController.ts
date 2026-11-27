@@ -22,20 +22,23 @@ export interface ImageSummary {
   starred: boolean
 }
 
-/** Current version rows for a page of images: one query, joined in memory
- *  (`(imageId, version)` is unique and `currentVersion` points at one of them). */
+/** Current version rows plus every version for the details panel: one query,
+ *  joined in memory (`(imageId, version)` is unique and `currentVersion` points
+ *  at one of them). The resource sorts the panel newest first. */
 async function toImageItems(images: ImageRecord[], urls: UrlBuilder): Promise<ImageItemData[]> {
   if (images.length === 0) return []
   const versions = await ImageVersion.whereIn('imageId', images.map((image) => image.id)).get()
-  const current = new Map<number, ImageVersionRecord>()
+  const byImage = new Map<number, ImageVersionRecord[]>()
   for (const version of versions) {
-    const image = images.find((candidate) => candidate.id === version.imageId)
-    if (image && version.version === image.currentVersion) current.set(image.id, version)
+    const rows = byImage.get(version.imageId) ?? []
+    rows.push(version)
+    byImage.set(version.imageId, rows)
   }
   return images.map((image) => {
-    const version = current.get(image.id)
+    const rows = byImage.get(image.id) ?? []
+    const version = rows.find((row) => row.version === image.currentVersion)
     if (!version) throw new Error(`Image ${image.id} has no row for its current version ${image.currentVersion}`)
-    return new ImageItem({ image, version }, urls).toJSON()
+    return new ImageItem({ image, version, versions: rows }, urls).toJSON()
   })
 }
 

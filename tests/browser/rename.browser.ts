@@ -104,10 +104,22 @@ test.describe('rename', () => {
     await createFolder(page, folderName)
 
     const card = page.locator('li').filter({ has: page.getByRole('link', { name: folderName }) })
-    await card.hover()
-    await page.keyboard.press('F2')
     const input = page.getByRole('textbox', { name: `Rename ${folderName}` })
-    await expect(input).toBeVisible()
+    // The page's F2 listener is registered in an effect that depends on the
+    // hovered item, so the key must arrive after that commit. With a large
+    // accumulated drive the hover can land on a card that a late layout shift
+    // scrolls under the pointer, so each attempt clears a stray rename first.
+    await expect(async () => {
+      if (await page.getByRole('textbox', { name: /^Rename / }).count()) {
+        await page.keyboard.press('Escape')
+      }
+      await card.hover()
+      await page.evaluate(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+      )
+      await page.keyboard.press('F2')
+      await expect(input).toBeVisible({ timeout: 1_000 })
+    }).toPass({ timeout: 15_000 })
     await input.fill(renamed)
     await input.press('Enter')
 

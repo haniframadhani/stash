@@ -76,6 +76,7 @@ test.describe('replace image', () => {
     await card.dblclick()
     const lightbox = page.getByRole('dialog', { name: `Lightbox: ${name}` })
     await lightbox.getByRole('button', { name: 'Show info' }).click()
-    await expect(lightbox.getByText('v2', { exact: true })).toBeVisible()
+    const versions = lightbox.locator('section').filter({ hasText: 'Versions' })
+    await expect(versions.getByText('v2', { exact: true })).toBeVisible()
   })
 })

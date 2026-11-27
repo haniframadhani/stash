@@ -29,8 +29,8 @@ export interface StashFlash {
 }
 
 /** One stored image version as the server sends it (ROUTES_SPEC §3; built by
- *  app/Http/Resources/ImageItem.ts once the versions payload lands, task 3.2).
- *  Timestamps arrive as epoch ms. */
+ *  app/Http/Resources/ImageItem.ts). Timestamps arrive as epoch ms; the list is
+ *  newest first. */
 export interface ImageVersionSummary {
   version: number
   format: 'avif' | 'webp' | 'jpeg' | 'png' | 'gif'
@@ -38,6 +38,11 @@ export interface ImageVersionSummary {
   width: number
   height: number
   createdAt: number
+  isCurrent: boolean
+  /** Bucket link pinned to this version; null without a files domain. */
+  permanent: string | null
+  /** Version-specific source for the panel's Open action. */
+  view: string
 }
 
 /** One image card as the server sends it (ROUTES_SPEC §3 ImageItem; built by

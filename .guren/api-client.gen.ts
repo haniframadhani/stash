@@ -51,6 +51,10 @@ export interface ApiRoutes {
     path: '/images/:id/versions'
     body: { format: unknown; quality: unknown; maxDimension: unknown }
   }
+  'images.restoreVersion': {
+    method: 'POST'
+    path: '/images/:id/versions/:version/restore'
+  }
   'images.update': {
     method: 'PATCH'
     path: '/images/:id'
@@ -337,6 +341,7 @@ const routes: Record<string, { method: string; path: string }> = {
   'folders.update': { method: 'PATCH', path: '/folders/:id' },
   'home': { method: 'GET', path: '/' },
   'images.replace': { method: 'POST', path: '/images/:id/versions' },
+  'images.restoreVersion': { method: 'POST', path: '/images/:id/versions/:version/restore' },
   'images.update': { method: 'PATCH', path: '/images/:id' },
   'items.delete': { method: 'POST', path: '/items/delete' },
   'items.move': { method: 'POST', path: '/items/move' },

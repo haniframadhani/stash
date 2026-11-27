@@ -76,7 +76,7 @@ type ImageItem = {
     view: string;             // lightbox src: files-domain object, else /preview
     permanent: string | null; // copyable bucket link; null without a files domain
   };
-  versions?: { version: number; format: string; size: number; createdAt: number; isCurrent: boolean; permanent: string | null }[]; // details panel only
+  versions?: { version: number; format: string; size: number; width: number; height: number; createdAt: number; isCurrent: boolean; permanent: string | null; view: string }[]; // details panel only, newest first
 };
 type FolderItem = { id: number; parentId: number | null; name: string; starred?: never; createdAt: number; updatedAt: number; deletedAt: number | null };
 type Crumb = { id: number | null; name: string };   // id null = "My Files"

@@ -9,6 +9,7 @@ import { Controller, HttpException, ValidationException } from '@guren/core'
 import type { AppEnv } from '@guren/core'
 import type { ImageSettings } from '../../../config/images.js'
 import { Image, type ImageRecord } from '../../Models/Image.js'
+import { ImageVersion } from '../../Models/ImageVersion.js'
 import type { UserRecord } from '../../Models/User.js'
 import { ImageItem } from '../Resources/ImageItem.js'
 import { ImageConversionError } from '../../Services/ImageErrors.js'
@@ -61,6 +62,26 @@ export default class ImageController extends Controller {
       savedBytes: stored.saved.savedBytes,
       savedPercent: stored.saved.savedPercent,
     })
+  }
+
+  /** `images.restoreVersion` (docs/IMAGE_PIPELINE.md §4): "Make current" moves
+   *  only the pointer. The version's object already exists, so nothing is
+   *  written and no pinned link changes; a pruned or unknown version is a 404. */
+  async restoreVersion(): Promise<Response> {
+    await this.auth.userOrFail<UserRecord>()
+    const { params } = this.validated('images.restoreVersion')
+    const image = await this.activeImage(Number(params.id))
+    const version = Number(params.version)
+
+    const row = await ImageVersion.first({ imageId: image.id, version })
+    if (!row) throw new HttpException(404, 'Version not found.')
+
+    await Image.update(
+      { id: image.id },
+      { currentVersion: version },
+      { set: { updatedAt: new Date().toISOString() } },
+    )
+    return this.redirect(redirectTargetFor(image.folderId))
   }
 
   /** `:id` names an active image; unknown ids 404 via `findOrFail`, trashed

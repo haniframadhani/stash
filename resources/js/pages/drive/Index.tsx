@@ -266,6 +266,15 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
   const lightboxIndex = lightboxId === null ? -1 : sortedImages.findIndex((image) => image.id === lightboxId)
   const lightboxImage = lightboxIndex >= 0 ? sortedImages[lightboxIndex] : null
 
+  // The drive defers `images`, so a props reload (e.g. Make current) briefly
+  // unmounts the lightbox and would drop its Info panel. Keep the last image
+  // of this lightbox id on screen until the fresh list lands.
+  const [lastLightbox, setLastLightbox] = useState<ImageItem | null>(null)
+  useEffect(() => {
+    if (lightboxImage) setLastLightbox(lightboxImage)
+  }, [lightboxImage])
+  const shownImage = lightboxImage ?? (lastLightbox && lastLightbox.id === lightboxId ? lastLightbox : null)
+
   const stepLightbox = useCallback(
     (delta: number) => {
       if (lightboxIndex < 0) return
@@ -374,6 +383,16 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
       }
     })
   }, [replacing])
+
+  /** Task 3.2: Make current moves the pointer only; the redirect reloads the
+   *  page, and `preserveState` keeps the lightbox and its Info panel open. */
+  const restoreVersion = useCallback((image: ImageItem, version: number) => {
+    inertiaRouter.post(`/images/${image.id}/versions/${version}/restore`, {}, {
+      preserveScroll: true,
+      preserveState: true,
+      onError: () => showToast('error', 'Could not make that version current.'),
+    })
+  }, [])
 
   const menuItems = menu
     ? imageMenuItems(menu.image, {
@@ -551,10 +570,10 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
           onClose={() => setMenu(null)}
         />
       )}
-      {lightboxImage && (
+      {shownImage && (
         <Lightbox
-          image={lightboxImage}
-          versions={lightboxImage.versions}
+          image={shownImage}
+          versions={shownImage.versions}
           canPrev={lightboxIndex > 0}
           canNext={lightboxIndex >= 0 && lightboxIndex < sortedImages.length - 1}
           onPrev={() => stepLightbox(-1)}
@@ -563,7 +582,8 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
           onDownload={(image) => {
             window.location.assign(imageDownloadUrl(image))
           }}
-          onShare={() => setSharing(lightboxImage)}
+          onShare={() => setSharing(shownImage)}
+          onRestoreVersion={(version) => restoreVersion(shownImage, version)}
         />
       )}
       {sharing && <ShareDialog image={sharing} onClose={() => setSharing(null)} />}

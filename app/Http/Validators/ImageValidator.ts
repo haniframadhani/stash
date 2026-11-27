@@ -24,3 +24,10 @@ export const ImageUpdateSchema = z.object({
 export const ImageIdParams = z.object({
   id: z.string().regex(/^\d+$/),
 })
+
+/** `images.restoreVersion`: the image id and the pinned version to make
+ *  current. A version that is unknown or already pruned is a 404. */
+export const ImageVersionParams = z.object({
+  id: z.string().regex(/^\d+$/),
+  version: z.string().regex(/^\d+$/),
+})

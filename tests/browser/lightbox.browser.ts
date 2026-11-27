@@ -63,9 +63,9 @@ test.describe('context menu and lightbox', () => {
     await expect(menu.getByRole('menuitem', { name: 'Download' })).toBeVisible()
     await expect(menu.getByRole('menuitem', { name: 'Rename' })).toBeVisible()
     await expect(menu.getByRole('menuitem', { name: 'Move to…' })).toBeVisible()
-    // Share (3.3) and Move to trash (4.2) shipped; Replace/Star are still hidden.
+    // Share (3.3), Replace (3.1) and Move to trash (4.2) shipped; Star is still hidden.
     await expect(menu.getByRole('menuitem', { name: 'Share' })).toBeVisible()
-    await expect(menu.getByRole('menuitem', { name: 'Replace image…' })).toHaveCount(0)
+    await expect(menu.getByRole('menuitem', { name: 'Replace image…' })).toBeVisible()
     await expect(menu.getByRole('menuitem', { name: 'Star' })).toHaveCount(0)
     await expect(menu.getByRole('menuitem', { name: 'Move to trash' })).toBeVisible()
 
@@ -86,10 +86,12 @@ test.describe('context menu and lightbox', () => {
     await page.keyboard.press('ArrowLeft')
     await expect(page.getByRole('dialog', { name: `Lightbox: ${names[1]}` })).toBeVisible()
 
-    // Info panel: facts now, Versions with 3.2.
+    // Info panel: facts and the versions list (task 3.2).
     await lightbox.getByRole('button', { name: 'Show info' }).click()
     await expect(lightbox.getByText('Dimensions')).toBeVisible()
-    await expect(lightbox.getByText('Versions')).toHaveCount(0)
+    const versions = lightbox.locator('section').filter({ hasText: 'Versions' })
+    await expect(versions.getByText('v1', { exact: true })).toBeVisible()
+    await expect(versions.getByText('Current', { exact: true })).toBeVisible()
 
     // Esc closes and drops the URL param.
     await page.keyboard.press('Escape')

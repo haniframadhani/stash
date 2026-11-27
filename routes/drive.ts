@@ -7,7 +7,7 @@ import ItemController from '../app/Http/Controllers/ItemController.js'
 import PreviewImageController from '../app/Http/Controllers/PreviewImageController.js'
 import UploadController from '../app/Http/Controllers/UploadController.js'
 import { FolderIdParams, FolderStoreSchema, FolderUpdateSchema } from '../app/Http/Validators/FolderValidator.js'
-import { ImageIdParams, ImageUpdateSchema } from '../app/Http/Validators/ImageValidator.js'
+import { ImageIdParams, ImageUpdateSchema, ImageVersionParams } from '../app/Http/Validators/ImageValidator.js'
 import { ItemBatchSchema, ItemMoveSchema } from '../app/Http/Validators/ItemValidator.js'
 import { UploadOptionsSchema, ReplaceOptionsSchema } from '../app/Http/Validators/UploadValidator.js'
 
@@ -65,6 +65,14 @@ export function registerDriveRoutes(router: Router): void {
     '/images/:id/versions',
     { name: 'images.replace', params: ImageIdParams, body: ReplaceOptionsSchema },
     [ImageController, 'replace'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
+
+  // images.restoreVersion (ROUTES_SPEC §4): the pointer moves back to a version
+  // that already exists; no object is written, so both pinned links keep working.
+  router.post(
+    '/images/:id/versions/:version/restore',
+    { name: 'images.restoreVersion', params: ImageVersionParams },
+    [ImageController, 'restoreVersion'],
   ).middleware(requireAuthenticated({ redirectTo: '/login' }))
 
   // items.move / trash / restore / delete (ROUTES_SPEC §4): one bulk request

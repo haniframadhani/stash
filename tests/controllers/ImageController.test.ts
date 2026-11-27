@@ -9,6 +9,8 @@ import { ImageVersion, type ImageVersionRecord } from '../../app/Models/ImageVer
 import { ImageStore, newPublicId } from '../../app/Services/ImageStore.js'
 import { toSlug } from '../../app/Services/Slug.js'
 import { replaceImage } from '../../app/Services/Uploads.js'
+import { UrlBuilder } from '../../app/Services/UrlBuilder.js'
+import { ImageItem } from '../../app/Http/Resources/ImageItem.js'
 import type { ImageSettings } from '../../config/images.js'
 import { User } from '../../app/Models/User.js'
 import sharp from 'sharp'
@@ -311,5 +313,98 @@ describe('images.replace (task 3.1)', () => {
     await Image.update({ id: image.id }, {}, { set: { deletedAt: Date.now() } })
     await client.post(`/images/${image.id}/versions`, replaceForm(await jpegBytes())).assertNotFound()
     expect(await ImageVersion.where({ imageId: image.id }).count()).toBe(1)
+  })
+})
+
+// Task 3.2 (docs/IMAGE_PIPELINE.md §4): "Make current" moves the pointer to an
+// existing version only. No object is written or deleted, so both pinned links
+// keep working; a pruned or unknown version is a 404.
+describe('images.restoreVersion (task 3.2)', () => {
+  async function imageWithTwoVersions() {
+    const client = await authClient()
+    const seeded = await seedImage()
+    await client
+      .post(`/images/${seeded.image.id}/versions`, replaceForm(await jpegBytes('blue')))
+      .assertCreated()
+    const v2 = (await ImageVersion.first({ imageId: seeded.image.id, version: 2 }))!
+    return { client, ...seeded, v2 }
+  }
+
+  it('moves only the pointer and leaves both pinned versions readable', async () => {
+    const { client, image, publicId, oldSlug, bytes, v2 } = await imageWithTwoVersions()
+    const v2Bytes = (await disk.get(v2.storageKey))!
+
+    await client.post(`/images/${image.id}/versions/1/restore`, {}).assertRedirect('/files')
+
+    expect((await Image.find(image.id))?.currentVersion).toBe(1)
+    // Objects and rows are untouched: only the pointer moved.
+    expect((await ImageVersion.where({ imageId: image.id }).count())).toBe(2)
+    expect(await disk.get(`images/${publicId}/v2.webp`)).toEqual(v2Bytes)
+
+    const v1 = await client.get(`/preview/${publicId}/${oldSlug}.v1.webp`).assertOk()
+    expect(await v1.text()).toBe(bytes.toString())
+    const pinned = await client.get(`/preview/${publicId}/${oldSlug}.v2.webp`).assertOk()
+    pinned.assertHeader('Content-Length', String(v2.size))
+
+    // The current version (the "latest" view) is v1 again.
+    const page = await client
+      .withHeaders({
+        'X-Inertia': 'true',
+        'X-Inertia-Partial-Component': 'drive/Index',
+        'X-Inertia-Partial-Data': 'images',
+      })
+      .get('/files')
+    const props = await page.json<{ props: { images: Array<{ id: number, version: number, urls: { view: string }, versions: Array<{ version: number, isCurrent: boolean, permanent: string | null }> }> } }>()
+    const item = props.props.images.find((candidate) => candidate.id === image.id)!
+    expect(item.version).toBe(1)
+    expect(item.urls.view.endsWith('.v1.webp')).toBe(true)
+    expect(item.versions.map((row) => row.version)).toEqual([2, 1])
+    expect(item.versions.map((row) => row.isCurrent)).toEqual([false, true])
+  })
+
+  it('answers 404 for a pruned version and for an unknown one', async () => {
+    const client = await authClient()
+    const { image } = await seedImage()
+    // keepVersions=1 prunes v1 when v2 lands, so v1's row and objects are gone.
+    await replaceImage({
+      image,
+      bytes: await jpegBytes('green'),
+      originalName: 'replacement.jpg',
+      options: { format: 'webp' },
+      settings: { ...settings(), keepVersions: 1 },
+    })
+    expect(await ImageVersion.first({ imageId: image.id, version: 1 })).toBeNull()
+
+    await client.post(`/images/${image.id}/versions/1/restore`, {}).assertNotFound()
+    await client.post(`/images/${image.id}/versions/99/restore`, {}).assertNotFound()
+    expect((await Image.find(image.id))?.currentVersion).toBe(2)
+  })
+
+  it('rejects a guest and a trashed image', async () => {
+    const { image } = await seedImage()
+    const guest = await http.post(`/images/${image.id}/versions/1/restore`, {})
+    expect([401, 403, 302]).toContain(guest.status)
+
+    const client = await authClient()
+    await Image.update({ id: image.id }, {}, { set: { deletedAt: Date.now() } })
+    await client.post(`/images/${image.id}/versions/1/restore`, {}).assertNotFound()
+  })
+
+  it('builds a permanent bucket link for every version when a files domain is set', async () => {
+    const { image, version, publicId } = await seedImage()
+    const versions = [version, { ...version, version: 2, ext: 'avif' }]
+    const data = new ImageItem(
+      { image: { ...image, currentVersion: 2 }, version: versions[1]!, versions },
+      new UrlBuilder('https://files.test/'),
+    ).toJSON()
+
+    expect(data.versions?.map((row) => row.permanent)).toEqual([
+      `https://files.test/images/${publicId}/v2.avif`,
+      `https://files.test/images/${publicId}/v1.webp`,
+    ])
+    expect(data.versions?.map((row) => row.view)).toEqual([
+      `https://files.test/images/${publicId}/v2.avif`,
+      `https://files.test/images/${publicId}/v1.webp`,
+    ])
   })
 })

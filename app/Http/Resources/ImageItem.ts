@@ -8,6 +8,20 @@ import type { ImageRecord } from '../../Models/Image.js'
 import type { ImageVersionRecord } from '../../Models/ImageVersion.js'
 import { UrlBuilder } from '../../Services/UrlBuilder.js'
 
+export type ImageVersionItemData = {
+  version: number
+  format: ImageItemData['format']
+  size: number
+  width: number
+  height: number
+  createdAt: number
+  isCurrent: boolean
+  /** Bucket link pinned to this version; null without a files domain. */
+  permanent: string | null
+  /** Version-specific source for the panel's Open action (bucket or preview). */
+  view: string
+}
+
 export type ImageItemData = {
   id: number
   publicId: string
@@ -33,16 +47,18 @@ export type ImageItemData = {
      *  there is nothing that would work while the app is off. */
     permanent: string | null
   }
+  /** The details panel's list, newest first; omitted on upload/replace answers. */
+  versions?: ImageVersionItemData[]
 }
 
 export class ImageItem extends Resource<
-  { image: ImageRecord, version: ImageVersionRecord },
+  { image: ImageRecord, version: ImageVersionRecord, versions?: ImageVersionRecord[] },
   ImageItemData
 > {
   private readonly urls: UrlBuilder
 
   constructor(
-    input: { image: ImageRecord, version: ImageVersionRecord },
+    input: { image: ImageRecord, version: ImageVersionRecord, versions?: ImageVersionRecord[] },
     urls: UrlBuilder,
   ) {
     super(input)
@@ -50,7 +66,7 @@ export class ImageItem extends Resource<
   }
 
   toArray(): ImageItemData {
-    const { image, version } = this.resource
+    const { image, version, versions } = this.resource
     const ref = { publicId: image.publicId, slug: image.slug, version: image.currentVersion, ext: version.ext }
     return {
       id: image.id,
@@ -73,6 +89,23 @@ export class ImageItem extends Resource<
         view: this.urls.view(image.publicId, image.slug, image.currentVersion, version.ext),
         permanent: this.urls.permanent(ref),
       },
+      ...(versions
+        ? {
+            versions: [...versions]
+              .sort((left, right) => right.version - left.version)
+              .map((row) => ({
+                version: row.version,
+                format: row.format as ImageItemData['format'],
+                size: row.size,
+                width: row.width,
+                height: row.height,
+                createdAt: Date.parse(row.createdAt),
+                isCurrent: row.version === image.currentVersion,
+                permanent: this.urls.permanent({ publicId: image.publicId, slug: image.slug, version: row.version, ext: row.ext }),
+                view: this.urls.view(image.publicId, image.slug, row.version, row.ext),
+              })),
+          }
+        : {}),
     }
   }
 }
