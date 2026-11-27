@@ -8,7 +8,10 @@ import { Folder } from '../../app/Models/Folder.js'
 import { ImageVersion, type ImageVersionRecord } from '../../app/Models/ImageVersion.js'
 import { ImageStore, newPublicId } from '../../app/Services/ImageStore.js'
 import { toSlug } from '../../app/Services/Slug.js'
+import { replaceImage } from '../../app/Services/Uploads.js'
+import type { ImageSettings } from '../../config/images.js'
 import { User } from '../../app/Models/User.js'
+import sharp from 'sharp'
 
 let http: TestApp
 let disposer: Disposable | undefined
@@ -182,5 +185,131 @@ describe('image routes (task 2.2)', () => {
     const { image } = await seedImage()
     await Image.update({ id: image.id }, {}, { set: { deletedAt: Date.now() } })
     await client.patch(`/images/${image.id}`, { name: 'New' }).assertNotFound()
+  })
+})
+
+// Task 3.1 (docs/IMAGE_PIPELINE.md §4, §7): replace appends version n+1 over
+// the same publicId, flips the pointer in one transaction, and prunes beyond
+// KEEP_VERSIONS. Old versions keep their keys, so their permanent links work.
+function jpegBytes(background = 'red'): Promise<Buffer> {
+  return sharp({ create: { width: 64, height: 48, channels: 3, background } }).jpeg({ quality: 90 }).toBuffer()
+}
+
+function replaceForm(bytes: Buffer, fields: Record<string, string> = {}): FormData {
+  const form = new FormData()
+  form.append('file', new File([new Uint8Array(bytes)], 'replacement.jpg', { type: 'image/jpeg' }))
+  for (const [key, value] of Object.entries(fields)) form.append(key, value)
+  return form
+}
+
+const settings = () => app.container.make<ImageSettings>('images')
+
+describe('images.replace (task 3.1)', () => {
+  it('writes v2, flips current_version and keeps v1 readable with its own bytes', async () => {
+    const client = await authClient()
+    const { image, publicId, oldSlug, bytes } = await seedImage()
+    const replacement = await jpegBytes('blue')
+
+    const response = await client
+      .post(`/images/${image.id}/versions`, replaceForm(replacement))
+      .assertCreated()
+
+    const body = await response.json<{
+      image: { version: number, name: string, format: string, urls: { view: string, thumb: string } }
+      originalSize: number
+      storedSize: number
+      savedPercent: number
+    }>()
+    expect(body.image.version).toBe(2)
+    expect(body.image.name).toBe(image.name)
+    expect(body.image.format).toBe('webp')
+    expect(body.image.urls.view.endsWith('.v2.webp')).toBe(true)
+    expect(body.image.urls.thumb.endsWith('.v2.thumb.webp')).toBe(true)
+    expect(body.originalSize).toBe(replacement.length)
+
+    const updated = await Image.find(image.id)
+    expect(updated?.currentVersion).toBe(2)
+    expect(updated?.name).toBe(image.name)
+
+    // v1 is untouched at its key and still served by the pinned link.
+    expect(await disk.get(`images/${publicId}/v1.webp`)).toEqual(bytes)
+    const oldLink = await client.get(`/preview/${publicId}/${oldSlug}.v1.webp`).assertOk()
+    oldLink.assertHeader('Content-Type', 'image/webp')
+    expect(await oldLink.text()).toBe(bytes.toString())
+
+    // v2 is a different key with different bytes and its own sha256.
+    const versions = await ImageVersion.where({ imageId: image.id }).orderBy('version', 'asc').get()
+    expect(versions.map((row) => row.version)).toEqual([1, 2])
+    expect(versions[1]!.storageKey).toBe(`images/${publicId}/v2.webp`)
+    expect(versions[1]!.sha256).not.toBe(versions[0]!.sha256)
+    expect(await disk.exists(`images/${publicId}/v2.webp`)).toBe(true)
+    expect(await disk.exists(`images/${publicId}/v2.thumb.webp`)).toBe(true)
+  })
+
+  it('keeps the pointer on the old version when the DB write fails, and deletes the orphan objects', async () => {
+    const { image, publicId } = await seedImage()
+    // An existing v2 row makes the insert collide, so the transaction rolls
+    // back after the objects were already written (§7).
+    await ImageVersion.create({
+      format: 'webp', mime: 'image/webp', ext: 'webp', size: 1, width: 1, height: 1,
+      sha256: 'squatter', storageKey: 'images/squatter/v2.webp', thumbKey: 'images/squatter/v2.thumb.webp',
+      originalName: 'squatter', originalFormat: 'jpeg', originalSize: 1, convertOptions: '{}',
+    }, { set: { imageId: image.id, version: 2 } })
+
+    await expect(replaceImage({
+      image,
+      bytes: await jpegBytes(),
+      originalName: 'replacement.jpg',
+      options: { format: 'webp' },
+      settings: settings(),
+    })).rejects.toThrow()
+
+    expect((await Image.find(image.id))?.currentVersion).toBe(1)
+    // Only v1's two objects remain: the failed v2 objects were cleaned up.
+    expect(disk.getAllPaths().sort()).toEqual([
+      `images/${publicId}/v1.thumb.webp`,
+      `images/${publicId}/v1.webp`,
+    ])
+  })
+
+  it('prunes beyond KEEP_VERSIONS, oldest first, never the current version', async () => {
+    const { image, publicId } = await seedImage()
+    const keepTwo: ImageSettings = { ...settings(), keepVersions: 2 }
+
+    let current = image
+    for (let index = 0; index < 3; index++) {
+      const stored = await replaceImage({
+        image: current,
+        bytes: await jpegBytes(['red', 'green', 'blue'][index]!),
+        originalName: 'replacement.jpg',
+        options: { format: 'webp' },
+        settings: keepTwo,
+      })
+      current = stored.image
+    }
+
+    expect(current.currentVersion).toBe(4)
+    const versions = await ImageVersion.where({ imageId: image.id }).orderBy('version', 'asc').get()
+    expect(versions.map((row) => row.version)).toEqual([3, 4])
+    expect(disk.getAllPaths().sort()).toEqual([
+      `images/${publicId}/v3.thumb.webp`,
+      `images/${publicId}/v3.webp`,
+      `images/${publicId}/v4.thumb.webp`,
+      `images/${publicId}/v4.webp`,
+    ])
+  })
+
+  it('rejects a guest and an unknown or trashed image', async () => {
+    const { image } = await seedImage()
+    const guest = await http.post(`/images/${image.id}/versions`, replaceForm(await jpegBytes()))
+    expect([401, 403, 302]).toContain(guest.status)
+    expect((await Image.find(image.id))?.currentVersion).toBe(1)
+
+    const client = await authClient()
+    await client.post('/images/999999/versions', replaceForm(await jpegBytes())).assertNotFound()
+
+    await Image.update({ id: image.id }, {}, { set: { deletedAt: Date.now() } })
+    await client.post(`/images/${image.id}/versions`, replaceForm(await jpegBytes())).assertNotFound()
+    expect(await ImageVersion.where({ imageId: image.id }).count()).toBe(1)
   })
 })

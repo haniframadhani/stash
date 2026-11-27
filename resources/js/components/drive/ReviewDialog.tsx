@@ -24,6 +24,10 @@ interface ReviewDialogProps {
   caps: StashCapabilities
   /** The destination from the page's breadcrumbs, shown in title and overlay. */
   folderName?: string | null
+  /** Task 3.1 replace reuses the same dialog for a single image: the heading
+   *  names the image and the button says Replace. */
+  heading?: string
+  confirmLabel?: string
   onCancel: () => void
   onConfirm: (uploads: ReviewUpload[]) => void
 }
@@ -42,7 +46,7 @@ function rowFormat(row: ReviewRow, format: RowFormat): RowFormat {
   return row.animated && format === 'avif' ? 'webp' : format
 }
 
-export default function ReviewDialog({ rows, caps, folderName, onCancel, onConfirm }: ReviewDialogProps) {
+export default function ReviewDialog({ rows, caps, folderName, heading, confirmLabel, onCancel, onConfirm }: ReviewDialogProps) {
   const remembered = loadUploadSettings(caps)
   const [format, setFormat] = useState<RowFormat>(() => remembered?.format ?? caps.defaults.format)
   const [quality, setQuality] = useState(() => remembered?.quality ?? defaultQuality(caps, format))
@@ -137,7 +141,7 @@ export default function ReviewDialog({ rows, caps, folderName, onCancel, onConfi
   }
 
   const title = validCount > 0
-    ? `Upload ${validCount} ${validCount === 1 ? 'image' : 'images'}${folderName ? ` to "${folderName}"` : ''}`
+    ? heading ?? `Upload ${validCount} ${validCount === 1 ? 'image' : 'images'}${folderName ? ` to "${folderName}"` : ''}`
     : 'Nothing to upload'
 
   return (
@@ -260,7 +264,7 @@ export default function ReviewDialog({ rows, caps, folderName, onCancel, onConfi
               />
               <div className="flex items-center gap-2">
                 <Button variant="secondary" onClick={onCancel}>Cancel</Button>
-                <Button onClick={confirm} disabled={validCount === 0}>Upload {validCount}</Button>
+                <Button onClick={confirm} disabled={validCount === 0}>{confirmLabel ?? `Upload ${validCount}`}</Button>
               </div>
             </div>
             {flaggedCount > 0 && (

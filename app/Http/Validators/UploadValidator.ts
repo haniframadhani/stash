@@ -17,4 +17,8 @@ export const UploadOptionsSchema = z.object({
   name: optionalField(z.string().min(1).max(255)),
 })
 
+/** `images.replace` (ROUTES_SPEC §4): the same convert options as an upload,
+ *  without a destination folder or a new name — a replace keeps both. */
+export const ReplaceOptionsSchema = UploadOptionsSchema.omit({ folderId: true, name: true })
+
 export type UploadOptionsInput = z.infer<typeof UploadOptionsSchema>

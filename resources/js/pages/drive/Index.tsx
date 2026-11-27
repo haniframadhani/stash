@@ -14,13 +14,16 @@ import ViewToggle from '../../components/drive/ViewToggle.js'
 import SelectionBar from '../../components/drive/SelectionBar.js'
 import MoveToPicker from '../../components/drive/MoveToPicker.js'
 import ContextMenu from '../../components/drive/ContextMenu.js'
+import ReviewDialog, { type ReviewUpload } from '../../components/drive/ReviewDialog.js'
 import { Lightbox } from '../../components/drive/Lightbox.js'
 import ShareDialog from '../../components/drive/ShareDialog.js'
+import { startReplace } from '../../components/drive/upload.js'
 import type { RenameTarget } from '../../components/drive/RenameInput.js'
 import { clearRenameAttempt, takeFailedRename } from '../../components/drive/RenameInput.js'
 import type { Crumb, FolderItem, ImageItem } from '../../types.js'
 import { driveViewUrl, readDriveView, sortImages, type DriveView } from '../../lib/driveView.js'
 import { imageDownloadUrl, imageMenuItems } from '../../lib/imageMenu.js'
+import { classifyReviewFiles, type ReviewRow } from '../../lib/reviewFiles.js'
 import {
   EMPTY_SELECTION,
   applySelection,
@@ -84,6 +87,10 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
   const [menu, setMenu] = useState<{ image: ImageItem, x: number, y: number } | null>(null)
   // Task 3.3: the share dialog targets one image at a time.
   const [sharing, setSharing] = useState<ImageItem | null>(null)
+  // Task 3.1: replace reuses the Review dialog for exactly one file.
+  const [replacing, setReplacing] = useState<{ image: ImageItem, rows: ReviewRow[] } | null>(null)
+  const replaceInputRef = useRef<HTMLInputElement>(null)
+  const replaceTarget = useRef<ImageItem | null>(null)
   const [lightboxId, setLightboxId] = useState<number | null>(() => lightboxIdFromUrl(url))
   const serverErrors = (props as { errors?: Record<string, string> }).errors
 
@@ -333,6 +340,41 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
     [moveItems],
   )
 
+  // Task 3.1 Replace image: picker → the same Review dialog (single file) →
+  // POST /images/:id/versions; the server writes v(n+1) and the old versions
+  // keep their keys. The dialog stages only, nothing is sent before Confirm.
+  const openReplace = useCallback((image: ImageItem) => {
+    replaceTarget.current = image
+    replaceInputRef.current?.click()
+  }, [])
+
+  const pickReplaceFile = useCallback((file: File | undefined) => {
+    const target = replaceTarget.current
+    if (!file || !target) return
+    const { avif, maxUploadMb } = props.capabilities
+    void classifyReviewFiles([file], { avif, maxUploadMb })
+      .then((rows) => setReplacing({ image: target, rows }))
+  }, [props.capabilities])
+
+  const confirmReplace = useCallback((uploads: readonly ReviewUpload[]) => {
+    const target = replacing?.image
+    const upload = uploads[0]
+    setReplacing(null)
+    if (!target || !upload) return
+
+    const handle = startReplace(target.id, upload.file, upload.options)
+    void handle.promise.then((outcome) => {
+      if (outcome.ok) {
+        showToast('success', `${target.name} replaced with v${target.version + 1}${outcome.savedPercent !== undefined ? ` (−${outcome.savedPercent}%)` : ''}`)
+        inertiaRouter.reload({
+          only: ['folder', 'breadcrumbs', 'folders', 'images', 'storage'],
+        })
+      } else if (!outcome.canceled) {
+        showToast('error', outcome.message ?? 'The image could not be replaced.')
+      }
+    })
+  }, [replacing])
+
   const menuItems = menu
     ? imageMenuItems(menu.image, {
         onOpen: () => {
@@ -350,6 +392,11 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
         onShare: () => {
           setMenu(null)
           setSharing(menu.image)
+        },
+        onReplace: () => {
+          const target = menu.image
+          setMenu(null)
+          openReplace(target)
         },
         onTrash: () => {
           const target = menu.image
@@ -520,6 +567,29 @@ export default function DriveIndex({ folder, breadcrumbs, folders, images, moveT
         />
       )}
       {sharing && <ShareDialog image={sharing} onClose={() => setSharing(null)} />}
+      {/* Single-file picker for Replace image… (task 3.1); the same review
+          dialog stages it, nothing is sent before Confirm. */}
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          pickReplaceFile(file)
+        }}
+      />
+      {replacing && (
+        <ReviewDialog
+          rows={replacing.rows}
+          caps={props.capabilities}
+          heading={`Replace "${replacing.image.name}"`}
+          confirmLabel="Replace"
+          onCancel={() => setReplacing(null)}
+          onConfirm={confirmReplace}
+        />
+      )}
     </Layout>
   )
 }

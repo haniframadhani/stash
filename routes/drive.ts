@@ -9,7 +9,7 @@ import UploadController from '../app/Http/Controllers/UploadController.js'
 import { FolderIdParams, FolderStoreSchema, FolderUpdateSchema } from '../app/Http/Validators/FolderValidator.js'
 import { ImageIdParams, ImageUpdateSchema } from '../app/Http/Validators/ImageValidator.js'
 import { ItemBatchSchema, ItemMoveSchema } from '../app/Http/Validators/ItemValidator.js'
-import { UploadOptionsSchema } from '../app/Http/Validators/UploadValidator.js'
+import { UploadOptionsSchema, ReplaceOptionsSchema } from '../app/Http/Validators/UploadValidator.js'
 
 // The private drive pages (ROUTES_SPEC §3). `/` funnels into the drive; a guest
 // chasing it lands on `/files` and is sent to `/login` by its middleware.
@@ -57,6 +57,14 @@ export function registerDriveRoutes(router: Router): void {
     '/images/:id',
     { name: 'images.update', params: ImageIdParams, body: ImageUpdateSchema },
     [ImageController, 'update'],
+  ).middleware(requireAuthenticated({ redirectTo: '/login' }))
+
+  // images.replace (ROUTES_SPEC §4): writes version n+1 and moves the pointer
+  // in one transaction; JSON so the dialog can show the same savings as upload.
+  router.post(
+    '/images/:id/versions',
+    { name: 'images.replace', params: ImageIdParams, body: ReplaceOptionsSchema },
+    [ImageController, 'replace'],
   ).middleware(requireAuthenticated({ redirectTo: '/login' }))
 
   // items.move / trash / restore / delete (ROUTES_SPEC §4): one bulk request

@@ -146,10 +146,11 @@ Sidebar entries for Recent and Starred stay on their "coming soon" pages until R
 
 ## M3: Versioning and sharing
 
-- [ ] **3.1 Replace image (new version)** `R1.1`
+- [x] **3.1 Replace image (new version)** `R1.1`
   `images.replace` per `IMAGE_PIPELINE.md` §4 and §7: write `v(n+1)`, flip `current_version` in one transaction, then prune beyond `KEEP_VERSIONS`. Context menu **Replace image…** reuses the Review dialog in single-file mode.
   AC: after a replace, the latest URL serves the new bytes with a new ETag; the previous permanent URL still serves the old bytes; the pointer flip is atomic (test with an injected failure).
   **Manual check:** replace an image → thumbnail updates → old permanent link still shows the old picture, latest link shows the new one.
+  Done 2026-11-27: `replaceImage` in `app/Services/Uploads.ts` (convert → `putVersion` at `publicId`/`n+1` → one transaction inserting the version row and flipping `current_version` → orphan cleanup on failure → best-effort prune of rows+objects beyond `KEEP_VERSIONS`, current version never pruned), `ReplaceOptionsSchema` (upload options without folder/name), `ImageController.replace`, `POST /images/:id/versions` (`images.replace`, JSON 201 with the same savings shape as upload). UI: `startReplace` shares the upload XHR; the context menu's **Replace image…** opens a single-file picker and the same `ReviewDialog` in single-file mode (`heading`/`confirmLabel` props), then reloads the page props and toasts the new version. Tests: `tests/controllers/ImageController.test.ts` (v2 key/bytes, v1 link still serves old bytes, injected v2 collision proves the pointer stays on v1 and the orphan v2 objects are deleted, prune keeps current+newest with rows and objects removed, guest/unknown/trashed rejected) and `tests/browser/replace.browser.ts` (the Manual check: dialog, thumbnail switches to v2, old preview still old bytes, new preview different, lightbox Info shows v2).
 
 - [ ] **3.2 Versions panel and restore** `R1.1`
   Lightbox info panel lists versions with copy-permanent-link, **Make current**, open. `images.restoreVersion` moves only the pointer.
@@ -371,3 +372,7 @@ _Agents: append one line per non-obvious decision: date · task · decision · r
 - 2026-11-27 · 6.2 · Manual check result: driven by `tests/browser/lightbox.browser.ts` (new "info panel leaves the lightbox and the page responsive" test), `bun run test:browser` and the 3.3 `share.browser.ts` green — no interactive browser tooling, so the `verify-in-browser` recording step was not run.
 - 2026-11-27 · 6.5 · The picker's select value is a plain string (`''` unchosen, `'root'`, or a folder id) instead of one `number | null` for two meanings · the root was unconfirmable because choosing My Files collapsed into the "nothing chosen" state.
 - 2026-11-27 · 6.5 · Manual check result: driven by `tests/browser/move.browser.ts` (new picker-to-root test; the sidebar and breadcrumb root drags still pass in the same run) — no interactive browser tooling, so the `verify-in-browser` recording step was not run.
+- 2026-11-27 · 3.1 · Replace reuses `Uploads.ts`'s pipeline (`replaceImage`) rather than a separate service: convert → `putVersion` at the same `publicId`/`n+1` → one transaction (version row + `current_version` flip), with the upload's orphan cleanup on failure · one write-order implementation keeps §7's "objects first, then rows" true in both paths; prune runs after the commit and a failure only logs, per §7.
+- 2026-11-27 · 3.1 · `ReviewDialog` gained optional `heading`/`confirmLabel` instead of a second dialog component · replace is the same review step with one row; the destination folder and "Apply to all" stay inert for a single file and nothing is sent before Confirm.
+- 2026-11-27 · 3.1 · Manual check result: driven by `tests/browser/replace.browser.ts` (context menu → picker → dialog → Replace → toast v2 → thumbnail `.v2.thumb.webp` → old v1 preview bytes unchanged → lightbox Info v2) — no interactive browser tooling, so the `verify-in-browser` recording step was not run.
+- 2026-11-27 · 3.1 · version 1.0.3 → 1.1.0 · Replace image is a new owner-visible capability (MINOR).

@@ -41,6 +41,27 @@ export function startUpload(
   /** Destination folder (ROUTES_SPEC §4); omitted at root. */
   folderId?: number,
 ): UploadHandle {
+  return sendImage('/uploads', file, options, onProgress, folderId)
+}
+
+/** Replace image with version n+1 (ROUTES_SPEC §4, task 3.1). Same XHR and
+ *  options as an upload; the server keeps the name and folder. */
+export function startReplace(
+  imageId: number,
+  file: File,
+  options: ConvertOptions,
+  onProgress?: (percent: number) => void,
+): UploadHandle {
+  return sendImage(`/images/${imageId}/versions`, file, options, onProgress)
+}
+
+function sendImage(
+  endpoint: string,
+  file: File,
+  options: ConvertOptions,
+  onProgress?: (percent: number) => void,
+  folderId?: number,
+): UploadHandle {
   const body = new FormData()
   body.append('file', file, file.name)
   body.append('format', options.format)
@@ -55,7 +76,7 @@ export function startUpload(
   }
 
   const xhr = new XMLHttpRequest()
-  xhr.open('POST', '/uploads')
+  xhr.open('POST', endpoint)
   xhr.responseType = 'json'
   const token = readCookie('XSRF-TOKEN')
   if (token) xhr.setRequestHeader('X-XSRF-TOKEN', decodeURIComponent(token))

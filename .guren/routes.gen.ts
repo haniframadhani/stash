@@ -10,6 +10,7 @@ export const routeManifest = {
   'folders.store': { method: 'POST', path: '/folders' },
   'folders.update': { method: 'PATCH', path: '/folders/:id' },
   'home': { method: 'GET', path: '/' },
+  'images.replace': { method: 'POST', path: '/images/:id/versions' },
   'images.update': { method: 'PATCH', path: '/images/:id' },
   'items.delete': { method: 'POST', path: '/items/delete' },
   'items.move': { method: 'POST', path: '/items/move' },
@@ -84,6 +85,7 @@ export const routes = {
   },
   home: (query?: RouteQuery) => route('home', query),
   images: {
+    replace: (params: RouteParams<'images.replace'>, query?: RouteQuery) => route('images.replace', params, query),
     update: (params: RouteParams<'images.update'>, query?: RouteQuery) => route('images.update', params, query)
   },
   items: {
@@ -165,6 +167,7 @@ declare module '@guren/core' {
     routes: {
       'folders.store': { body: { name: string; parentId?: number | null } }
       'folders.update': { params: { id: string }; body: { name?: string; parentId?: number | null } }
+      'images.replace': { params: { id: string }; body: { format?: "webp" | "avif" | "original"; quality?: number; maxDimension?: number } }
       'images.update': { params: { id: string }; body: { name?: string } }
       'items.delete': { body: { imageIds: number[]; folderIds: number[] } }
       'items.move': { body: { imageIds: number[]; folderIds: number[]; targetFolderId: number | null } }

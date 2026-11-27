@@ -23,6 +23,17 @@ export const foldersUpdateForm: RouteFormContract<'folders.update', 'PATCH', '/f
   },
 }
 
+export const imagesReplaceForm: RouteFormContract<'images.replace', 'POST', '/images/:id/versions', ApiRoutes['images.replace']['body']> = {
+  route: 'images.replace',
+  method: 'POST',
+  path: '/images/:id/versions',
+  fields: {
+    format: { type: 'object', required: true },
+    quality: { type: 'object', required: true },
+    maxDimension: { type: 'object', required: true },
+  },
+}
+
 export const imagesUpdateForm: RouteFormContract<'images.update', 'PATCH', '/images/:id', ApiRoutes['images.update']['body']> = {
   route: 'images.update',
   method: 'PATCH',
